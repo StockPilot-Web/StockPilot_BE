@@ -198,7 +198,7 @@ export class AnalyticsService {
         productSalesMap.set(sId, existing);
 
         // Group by category
-        const catName = item.stockItem?.product?.category?.name || 'Chưa phân loại';
+        const catName = item.stockItem?.product?.category?.name || 'Tiêu dùng khác';
         const catData = categoryMap.get(catName) || {
           name: catName,
           revenue: 0,
@@ -417,6 +417,7 @@ export class AnalyticsService {
           const netQty = Math.max(0, (i.quantity || 0) - (i.returnedQuantity || 0));
           cost += toNumber(i.costPriceSnapshot) * netQty;
         }));
+
         chartSeries.push({
           label: dateStr,
           date: `${vy}-${String(vm + 1).padStart(2, '0')}-${String(vd).padStart(2, '0')}`,
@@ -509,7 +510,6 @@ export class AnalyticsService {
       completedOrdersCount: orderCount,
       avgOrderValue,
       totalUnitsSold,
-
       grossUnitsSold: totalUnitsSold + totalUnitsReturned,
       returnedUnits: totalUnitsReturned,
       // Growth vs previous period
