@@ -1,13 +1,13 @@
 FROM node:24-bookworm-slim AS deps
 WORKDIR /app
-RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates python3 make g++ && rm -rf /var/lib/apt/lists/*
 COPY package*.json ./
 RUN npm ci
 
 FROM deps AS build
 COPY prisma ./prisma
 COPY src ./src
-COPY tsconfig.json ./
+COPY tsconfig*.json ./
 RUN npm run prisma:generate
 RUN npm run build
 RUN npm prune --omit=dev
@@ -16,6 +16,7 @@ FROM node:24-bookworm-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /app/data /app/backend/data /app/ai_memory/db && chown -R node:node /app
 USER node
 COPY --chown=node:node package*.json ./
 COPY --chown=node:node --from=build /app/node_modules ./node_modules
