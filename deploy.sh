@@ -23,6 +23,12 @@ ROOT_DIR="$(cd "$BACKEND_DIR/.." && pwd)"
 FRONTEND_DIR="$ROOT_DIR/frontend"
 ENV_FILE="$BACKEND_DIR/.env"
 
+# Repo BE và FE đều có thể kích hoạt deploy cùng lúc: chỉ cho một lượt chạy tại một thời điểm.
+if command -v flock >/dev/null 2>&1; then
+    exec 9>"$ROOT_DIR/.deploy.lock"
+    flock -w 1200 9 || { echo "❌ Đang có lượt deploy khác chạy quá 20 phút."; exit 1; }
+fi
+
 echo "=================================================================="
 echo "🚀 [$(date '+%Y-%m-%d %H:%M:%S')] BẮT ĐẦU TRIỂN KHAI STOCKPILOT (nhánh $BRANCH)"
 echo "📂 Thư mục gốc: $ROOT_DIR"
