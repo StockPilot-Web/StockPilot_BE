@@ -1,4 +1,4 @@
-name: Continuous Deployment to VPS (stockpilot.name.vn)
+name: Continuous Deployment to VPS (taphoasandg.com)
 
 on:
   push:

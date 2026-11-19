@@ -1,7 +1,7 @@
 #!/bin/bash
 # ==============================================================================
 # StockPilot Production Deployment Script (VPS Vietnix)
-# Domain: https://stockpilot.name.vn
+# Domain: lấy từ TENANT_ROOT_DOMAIN trong backend/.env (hiện tại: taphoasandg.com)
 #
 # Cấu trúc thư mục trên VPS:
 #   /var/www/stockpilot/
@@ -101,7 +101,8 @@ check() {
 if check "http://127.0.0.1:5000/api/v1/health/live" && check "http://127.0.0.1:3000/api/v1/health/live"; then
     echo "=================================================================="
     echo "🎉 TRIỂN KHAI THÀNH CÔNG"
-    echo "🌐 https://stockpilot.name.vn   (API: /api/v1)"
+    DOMAIN=$(grep -E "^TENANT_ROOT_DOMAIN=" "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d "\r\"' ")
+    echo "🌐 https://${DOMAIN:-taphoasandg.com}   (API: /api/v1)"
     echo "=================================================================="
 else
     echo "❌ Hệ thống chưa phản hồi đúng. Log backend:"
