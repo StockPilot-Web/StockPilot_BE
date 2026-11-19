@@ -18,7 +18,7 @@ import { AuditLogService } from '../../common/services/audit-log.service';
 import { LoginGuardService } from '../../common/services/login-guard.service';
 import { TwoFactorService } from '../../common/services/two-factor.service';
 import { isValidTenantCode, normalizeTenantCode } from '../../common/utils/tenant-slug';
-import { isBlockedSignupEmail } from '../../common/utils/signup-email-policy';
+import { SignupEmailPolicyService } from '../../common/services/signup-email-policy.service';
 import { sendPasswordResetOtpEmail, sendRegisterOtpEmail } from '../../common/services/email.service';
 import { sendPasswordResetOtpSms } from '../../common/services/sms.service';
 
@@ -35,7 +35,7 @@ export class AuthService {
   async sendRegisterOtp(input: z.infer<typeof sendRegisterOtpSchema>) {
     await this.assertSignupEnabled();
     const email = input.email.toLowerCase().trim();
-    this.assertSignupEmailAllowed(email);
+    await SignupEmailPolicyService.assertAllowed(email, this.prisma);
 
     // 1. Kiểm tra email đã tồn tại hay chưa
     const existingUser = await this.prisma.user.findUnique({
@@ -93,7 +93,7 @@ export class AuthService {
   ) {
     await this.assertSignupEnabled();
     const email = input.email.toLowerCase().trim();
-    this.assertSignupEmailAllowed(email);
+    await SignupEmailPolicyService.assertAllowed(email, this.prisma);
 
     // 1. Xác thực mã OTP đăng ký (bắt buộc trong production)
     if (input.otp) {
@@ -242,12 +242,6 @@ export class AuthService {
         },
       };
     });
-  }
-
-  private assertSignupEmailAllowed(email: string) {
-    if (isBlockedSignupEmail(email)) {
-      throw new ValidationError('Không chấp nhận email tạm thời/hộp thư công khai. Vui lòng dùng email thật của bạn.');
-    }
   }
 
   private async assertSignupEnabled() {

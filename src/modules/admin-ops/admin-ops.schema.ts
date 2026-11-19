@@ -118,14 +118,21 @@ export type IpBlockCreateInput = z.infer<typeof ipBlockCreateSchema>;
 export type IpActivityQuery = z.infer<typeof ipActivityQuerySchema>;
 
 // Hard-delete junk stores that never did business (bulk)
+// The preview (dryRun) is read-only: no reason/password needed. A real deletion requires both.
 export const purgeStoresSchema = z
   .object({
     storeIds: z.array(z.coerce.number().int().positive()).min(1, 'Chọn ít nhất 1 cửa hàng').max(100, 'Tối đa 100 cửa hàng mỗi lần'),
-    reason: reasonSchema,
-    actorPassword: actorPasswordSchema,
+    reason: reasonSchema.optional(),
+    actorPassword: actorPasswordSchema.optional(),
     dryRun: z.boolean().default(false),
+    blockCreators: z.boolean().default(false),
   })
-  .strict();
+  .strict()
+  .superRefine((v, ctx) => {
+    if (v.dryRun) return;
+    if (!v.reason) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['reason'], message: 'Vui lòng nhập lý do (ít nhất 3 ký tự)' });
+    if (!v.actorPassword) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['actorPassword'], message: 'Vui lòng nhập mật khẩu của bạn để xác nhận' });
+  });
 export type PurgeStoresBody = z.infer<typeof purgeStoresSchema>;
 
 // Device blocklist (browser device id / hardware fingerprint)

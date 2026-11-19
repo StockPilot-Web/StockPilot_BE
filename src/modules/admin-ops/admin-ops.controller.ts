@@ -6,6 +6,7 @@ import { OpsSettingKey } from '../../common/services/ops-settings.service';
 import { TwoFactorService } from '../../common/services/two-factor.service';
 import { AdminOpsService, RequestMeta } from './admin-ops.service';
 import { StorePurgeService } from './store-purge.service';
+import { SignupEmailPolicyService, SUGGESTED_ALLOWED_DOMAINS } from '../../common/services/signup-email-policy.service';
 
 function requestMeta(req: Request): RequestMeta {
   return {
@@ -100,7 +101,18 @@ export class AdminOpsController {
     'Đã chuyển quyền chủ cửa hàng và thu hồi phiên đăng nhập liên quan'
   );
 
-  purgeStores = respond((req) => this.storePurge.purge(req.body, req.user!.userId, requestMeta(req)));
+  purgeStores = respond((req) =>
+    this.storePurge.purge(req.body, {
+      userId: req.user!.userId,
+      peerAddress: req.socket?.remoteAddress ?? null,
+      device: readDeviceIdentity(req),
+      ...requestMeta(req),
+    })
+  );
+  getSignupEmailPolicy = respond(async () => ({
+    ...(await SignupEmailPolicyService.load()),
+    suggestedAllowlist: SUGGESTED_ALLOWED_DOMAINS,
+  }));
 
   // Data retention (dry run)
   getRetentionReport = respond((req) => this.service.getRetentionReport(req.query as any));

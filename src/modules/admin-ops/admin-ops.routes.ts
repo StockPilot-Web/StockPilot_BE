@@ -91,6 +91,8 @@ adminOpsRouter.delete(
   validate({ params: ipBlockIdParamSchema, body: ipBlockRemoveSchema }),
   controller.unblockDevice
 );
+// Sign-up e-mail policy (read-only view of all sources; edits go through PUT /settings/ops.signup.*)
+adminOpsRouter.get('/security/signup-email-policy', controller.getSignupEmailPolicy);
 adminOpsRouter.get('/security/ip-activity', validate({ query: ipActivityQuerySchema }), controller.getIpActivity);
 
 // A3 — payment health

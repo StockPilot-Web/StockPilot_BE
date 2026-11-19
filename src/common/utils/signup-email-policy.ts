@@ -1,7 +1,10 @@
+import { emailDomainOf, matchingRule, normalizeEmailDomain } from './email-domain';
+
 /**
  * Disposable / public-inbox e-mail providers. Anyone can read their inboxes, so the registration OTP
  * proves nothing and scripts use them to mass-create shops (incident 2026-11-19: @mailinator.com).
- * Extend at runtime with SIGNUP_BLOCKED_EMAIL_DOMAINS (comma separated).
+ * Always blocked. Admins add more at runtime in system_settings `ops.signup.blockedEmailDomains`
+ * (see services/signup-email-policy.service.ts); SIGNUP_BLOCKED_EMAIL_DOMAINS (env) is still honoured.
  */
 export const DEFAULT_BLOCKED_SIGNUP_DOMAINS = [
   'mailinator.com',
@@ -25,17 +28,15 @@ export const DEFAULT_BLOCKED_SIGNUP_DOMAINS = [
   'throwawaymail.com',
 ];
 
-function blockedDomains(): string[] {
-  const extra = String(process.env.SIGNUP_BLOCKED_EMAIL_DOMAINS ?? '')
+/** Domains from the SIGNUP_BLOCKED_EMAIL_DOMAINS env var (comma separated), normalised; invalid ones dropped. */
+export function envBlockedSignupDomains(): string[] {
+  return String(process.env.SIGNUP_BLOCKED_EMAIL_DOMAINS ?? '')
     .split(',')
-    .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
-    .filter(Boolean);
-  return [...DEFAULT_BLOCKED_SIGNUP_DOMAINS, ...extra];
+    .map((d) => normalizeEmailDomain(d))
+    .filter((d): d is string => Boolean(d));
 }
 
-/** True when the e-mail's domain (or a parent domain) is a disposable provider. */
+/** True when the e-mail's domain (or a parent domain) is in the built-in or env block list. */
 export function isBlockedSignupEmail(email: string): boolean {
-  const domain = String(email).trim().toLowerCase().split('@').pop() ?? '';
-  if (!domain) return false;
-  return blockedDomains().some((blocked) => domain === blocked || domain.endsWith(`.${blocked}`));
+  return matchingRule(emailDomainOf(email), [...DEFAULT_BLOCKED_SIGNUP_DOMAINS, ...envBlockedSignupDomains()]) !== null;
 }
