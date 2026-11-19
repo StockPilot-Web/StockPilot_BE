@@ -1,5 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { IpBlockActor } from '../../common/services/ip-blocklist.service';
+import { DeviceBlockActor } from '../../common/services/device-blocklist.service';
+import { readDeviceIdentity } from '../../common/utils/device-identity';
 import { OpsSettingKey } from '../../common/services/ops-settings.service';
 import { TwoFactorService } from '../../common/services/two-factor.service';
 import { AdminOpsService, RequestMeta } from './admin-ops.service';
@@ -15,6 +17,11 @@ function requestMeta(req: Request): RequestMeta {
 /** Actor for IP block writes: includes the proxy hop so a misconfigured range cannot lock everyone out. */
 function ipActor(req: Request): IpBlockActor {
   return { userId: req.user!.userId, peerAddress: req.socket?.remoteAddress ?? null, ...requestMeta(req) };
+}
+
+/** Actor for device block writes: includes the admin's own device so it cannot be blocked by mistake. */
+function deviceActor(req: Request): DeviceBlockActor {
+  return { userId: req.user!.userId, device: readDeviceIdentity(req), ...requestMeta(req) };
 }
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
@@ -57,6 +64,12 @@ export class AdminOpsController {
   unblockIp = respond(
     (req) => this.service.unblockIp(String(req.params.id), req.body.reason, ipActor(req)),
     'Đã gỡ chặn địa chỉ IP'
+  );
+  getDeviceBlocks = respond(() => this.service.getDeviceBlocks());
+  blockDevice = respond((req) => this.service.blockDevice(req.body, deviceActor(req)), 'Đã chặn thiết bị');
+  unblockDevice = respond(
+    (req) => this.service.unblockDevice(String(req.params.id), req.body.reason, deviceActor(req)),
+    'Đã gỡ chặn thiết bị'
   );
   getIpActivity = respond((req) => this.service.getIpActivity(req.query as any));
 

@@ -7,6 +7,7 @@ export type ErrorCode =
   | 'INSUFFICIENT_STOCK'
   | 'RATE_LIMITED'
   | 'IP_BLOCKED'
+  | 'DEVICE_BLOCKED'
   | 'INTERNAL_ERROR';
 
 export class AppError extends Error {
@@ -70,5 +71,12 @@ export class RateLimitedError extends AppError {
 export class IpBlockedError extends AppError {
   constructor(message = 'Truy cập từ địa chỉ IP này đã bị chặn. Liên hệ quản trị viên nếu bạn cho rằng đây là nhầm lẫn.') {
     super(message, 403, 'IP_BLOCKED');
+  }
+}
+
+/** Request rejected because the client's device id / hardware fingerprint is on the admin blocklist. */
+export class DeviceBlockedError extends AppError {
+  constructor(message = 'Thiết bị này đã bị chặn truy cập. Liên hệ quản trị viên nếu bạn cho rằng đây là nhầm lẫn.') {
+    super(message, 403, 'DEVICE_BLOCKED');
   }
 }

@@ -10,6 +10,7 @@ import {
   auditIdParamSchema,
   broadcastSchema,
   clearLockSchema,
+  deviceBlockCreateSchema,
   growthQuerySchema,
   ipActivityQuerySchema,
   ipBlockCreateSchema,
@@ -81,6 +82,14 @@ adminOpsRouter.delete(
   writeLimiter,
   validate({ params: ipBlockIdParamSchema, body: ipBlockRemoveSchema }),
   controller.unblockIp
+);
+adminOpsRouter.get('/security/device-blocks', controller.getDeviceBlocks);
+adminOpsRouter.post('/security/device-blocks', writeLimiter, validate({ body: deviceBlockCreateSchema }), controller.blockDevice);
+adminOpsRouter.delete(
+  '/security/device-blocks/:id',
+  writeLimiter,
+  validate({ params: ipBlockIdParamSchema, body: ipBlockRemoveSchema }),
+  controller.unblockDevice
 );
 adminOpsRouter.get('/security/ip-activity', validate({ query: ipActivityQuerySchema }), controller.getIpActivity);
 

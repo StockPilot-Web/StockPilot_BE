@@ -24,6 +24,9 @@ interface IpRecord {
   lastPath: string;
   lastMethod: string;
   lastUserAgent: string | null;
+  /** Distinct device ids / hardware fingerprints seen from this IP (most recent last, max 5 each). */
+  deviceIds: string[];
+  fingerprints: string[];
   buckets: Map<number, Counts>;
 }
 
@@ -34,6 +37,8 @@ export interface RecordInput {
   statusCode: number;
   userAgent?: string | null;
   blocked?: boolean;
+  deviceId?: string | null;
+  fingerprint?: string | null;
   now?: number;
 }
 
@@ -46,6 +51,14 @@ const emptyCounts = (): Counts => ({
   authRequests: 0,
   signupRequests: 0,
 });
+
+function remember(list: string[], value: string | null | undefined) {
+  if (!value) return;
+  const index = list.indexOf(value);
+  if (index !== -1) list.splice(index, 1);
+  list.push(value);
+  if (list.length > 5) list.shift();
+}
 
 const SIGNUP_PATH = /\/auth\/(register|send-register-otp)\/?$/;
 const AUTH_PATH = /\/auth\//;
@@ -69,12 +82,14 @@ export class IpActivityService {
       // Re-insert so Map order stays least-recently-seen first (cheap LRU eviction below).
       this.records.delete(ip);
     } else {
-      record = { firstSeen: now, lastSeen: now, lastPath: path, lastMethod: input.method, lastUserAgent: null, buckets: new Map() };
+      record = { firstSeen: now, lastSeen: now, lastPath: path, lastMethod: input.method, lastUserAgent: null, deviceIds: [], fingerprints: [], buckets: new Map() };
     }
     record.lastSeen = now;
     record.lastPath = path;
     record.lastMethod = input.method;
     record.lastUserAgent = input.userAgent ? String(input.userAgent).slice(0, 255) : record.lastUserAgent;
+    remember(record.deviceIds, input.deviceId);
+    remember(record.fingerprints, input.fingerprint);
 
     for (const key of record.buckets.keys()) {
       if (key <= minute - IP_ACTIVITY_WINDOW_MINUTES) record.buckets.delete(key);
@@ -122,6 +137,8 @@ export class IpActivityService {
         lastMethod: record.lastMethod,
         lastPath: record.lastPath,
         lastUserAgent: record.lastUserAgent,
+        deviceIds: [...record.deviceIds],
+        fingerprints: [...record.fingerprints],
       });
     }
     rows.sort((a, b) => b.requests - a.requests || b.lastSeen.localeCompare(a.lastSeen));

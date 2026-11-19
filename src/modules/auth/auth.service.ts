@@ -87,7 +87,10 @@ export class AuthService {
     return publicResult;
   }
 
-  async registerOwner(input: z.infer<typeof registerSchema>, meta?: { userAgent?: string; ipAddress?: string }) {
+  async registerOwner(
+    input: z.infer<typeof registerSchema>,
+    meta?: { userAgent?: string; ipAddress?: string; deviceId?: string | null; fingerprint?: string | null }
+  ) {
     await this.assertSignupEnabled();
     const email = input.email.toLowerCase().trim();
     this.assertSignupEmailAllowed(email);
@@ -198,6 +201,9 @@ export class AuthService {
           storeId: store.id,
           storeCode: store.code,
           ownerUserId: user.id,
+          // Device signals, so an admin can block the machine behind junk sign-ups.
+          deviceId: meta?.deviceId ?? null,
+          fingerprint: meta?.fingerprint ?? null,
         },
         ipAddress: meta?.ipAddress,
         userAgent: meta?.userAgent,

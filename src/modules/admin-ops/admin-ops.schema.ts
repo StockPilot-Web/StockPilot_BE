@@ -127,3 +127,14 @@ export const purgeStoresSchema = z
   })
   .strict();
 export type PurgeStoresBody = z.infer<typeof purgeStoresSchema>;
+
+// Device blocklist (browser device id / hardware fingerprint)
+export const deviceBlockCreateSchema = z
+  .object({
+    kind: z.enum(['DEVICE', 'FINGERPRINT']),
+    value: z.string().trim().min(16).max(64),
+    reason: reasonSchema,
+    expiresInHours: z.number().int().min(1).max(24 * 90).nullable().optional(),
+  })
+  .strict();
+export type DeviceBlockCreateInput = z.infer<typeof deviceBlockCreateSchema>;

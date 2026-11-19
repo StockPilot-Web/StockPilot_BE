@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import { logger } from '../logger';
 import { HttpMetricsService } from '../services/http-metrics.service';
 import { IpActivityService } from '../services/ip-activity.service';
+import { readDeviceIdentity } from '../utils/device-identity';
 
 export function requestLoggerMiddleware(req: Request, res: Response, next: NextFunction) {
   const start = process.hrtime.bigint();
@@ -20,6 +21,7 @@ export function requestLoggerMiddleware(req: Request, res: Response, next: NextF
       statusCode: res.statusCode,
       userAgent: req.headers['user-agent'],
       blocked: res.locals.ipBlocked === true,
+      ...readDeviceIdentity(req),
     });
 
     logger.info('http_request_completed', {

@@ -15,6 +15,7 @@ import {
 import { OpsSettingKey, OpsSettingsService } from '../../common/services/ops-settings.service';
 import { IpActivityService } from '../../common/services/ip-activity.service';
 import { IpBlockActor, IpBlocklistService } from '../../common/services/ip-blocklist.service';
+import { DeviceBlockActor, DeviceBlocklistService } from '../../common/services/device-blocklist.service';
 import {
   SYSTEM_SETTING_KEYS,
   SystemSettingKey,
@@ -29,6 +30,7 @@ import {
   GrowthQuery,
   IpActivityQuery,
   IpBlockCreateInput,
+  DeviceBlockCreateInput,
   LoginFailureQuery,
   PaymentHealthQuery,
   SettingHistoryQuery,
@@ -821,6 +823,18 @@ export class AdminOpsService {
   // IP blocklist + IP activity (security incident response)
   // ---------------------------------------------------------------------------
 
+  getDeviceBlocks() {
+    return DeviceBlocklistService.list(this.prisma);
+  }
+
+  blockDevice(input: DeviceBlockCreateInput, actor: DeviceBlockActor) {
+    return DeviceBlocklistService.add(input, actor, this.prisma);
+  }
+
+  unblockDevice(id: string, reason: string, actor: DeviceBlockActor) {
+    return DeviceBlocklistService.remove(id, reason, actor, this.prisma);
+  }
+
   getIpBlocks() {
     return IpBlocklistService.list(this.prisma);
   }
@@ -859,6 +873,7 @@ export class AdminOpsService {
           createdAt: true,
           ipAddress: true,
           userAgent: true,
+          afterJson: true,
           storeId: true,
           store: { select: { id: true, name: true, code: true, isActive: true } },
           user: { select: { id: true, email: true } },
@@ -892,7 +907,14 @@ export class AdminOpsService {
       audit: {
         windowHours: query.hours,
         byIp: await Promise.all(auditTop.map((row) => withBlocked(row.ipAddress, row))),
-        recentSignups: await Promise.all(recentSignups.map((row) => withBlocked(row.ipAddress, row))),
+        recentSignups: await Promise.all(
+          recentSignups.map(async ({ afterJson, ...row }) => {
+            const device = (afterJson ?? {}) as { deviceId?: string | null; fingerprint?: string | null };
+            const identity = { deviceId: device.deviceId ?? null, fingerprint: device.fingerprint ?? null };
+            const deviceBlockedBy = await DeviceBlocklistService.match(identity, this.prisma);
+            return { ...(await withBlocked(row.ipAddress, row)), ...identity, deviceBlockedBy };
+          })
+        ),
       },
     };
   }
