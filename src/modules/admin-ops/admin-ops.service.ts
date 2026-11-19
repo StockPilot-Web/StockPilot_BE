@@ -13,6 +13,8 @@ import {
   LoginGuardService,
 } from '../../common/services/login-guard.service';
 import { OpsSettingKey, OpsSettingsService } from '../../common/services/ops-settings.service';
+import { IpActivityService } from '../../common/services/ip-activity.service';
+import { IpBlockActor, IpBlocklistService } from '../../common/services/ip-blocklist.service';
 import {
   SYSTEM_SETTING_KEYS,
   SystemSettingKey,
@@ -25,6 +27,8 @@ import { DecisionJobsService } from '../decision-engine/decision-jobs.service';
 import {
   BroadcastInput,
   GrowthQuery,
+  IpActivityQuery,
+  IpBlockCreateInput,
   LoginFailureQuery,
   PaymentHealthQuery,
   SettingHistoryQuery,
@@ -32,6 +36,9 @@ import {
   SupportSlaQuery,
   TransferOwnerInput,
 } from './admin-ops.schema';
+
+/** Audit action written by AuthService.registerOwner for every new shop. */
+const SIGNUP_AUDIT_ACTION = 'STORE_REGISTERED';
 
 export interface RequestMeta {
   ipAddress?: string | null;
@@ -808,5 +815,85 @@ export class AdminOpsService {
     });
 
     return { announcementId, recipients: sent, storeCount };
+  }
+
+  // ---------------------------------------------------------------------------
+  // IP blocklist + IP activity (security incident response)
+  // ---------------------------------------------------------------------------
+
+  getIpBlocks() {
+    return IpBlocklistService.list(this.prisma);
+  }
+
+  blockIp(input: IpBlockCreateInput, actor: IpBlockActor) {
+    return IpBlocklistService.add(input, actor, this.prisma);
+  }
+
+  unblockIp(id: string, reason: string, actor: IpBlockActor) {
+    return IpBlocklistService.remove(id, reason, actor, this.prisma);
+  }
+
+  /**
+   * Who is hitting the platform: live per-IP request counts (in-memory, this process, last hour)
+   * plus the durable audit trail per IP (sign-ups, failed/blocked logins) and the latest sign-ups,
+   * so an admin can find the IP behind junk shops and block it.
+   */
+  async getIpActivity(query: IpActivityQuery) {
+    const since = new Date(Date.now() - query.hours * 3600_000);
+    const actions = [SIGNUP_AUDIT_ACTION, LOGIN_FAILED_ACTION, LOGIN_BLOCKED_ACTION];
+
+    const [grouped, recentSignups] = await Promise.all([
+      this.prisma.auditLog.groupBy({
+        by: ['ipAddress', 'action'],
+        where: { action: { in: actions }, createdAt: { gte: since }, ipAddress: { not: null } },
+        _count: { _all: true },
+        _max: { createdAt: true },
+        orderBy: { _count: { ipAddress: 'desc' } },
+        take: 2000,
+      }),
+      this.prisma.auditLog.findMany({
+        where: { action: SIGNUP_AUDIT_ACTION, createdAt: { gte: since } },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: {
+          createdAt: true,
+          ipAddress: true,
+          userAgent: true,
+          storeId: true,
+          store: { select: { id: true, name: true, code: true, isActive: true } },
+          user: { select: { id: true, email: true } },
+        },
+      }),
+    ]);
+
+    const byIp = new Map<string, { ipAddress: string; signups: number; loginFailures: number; loginBlocked: number; total: number; lastAt: Date | null }>();
+    for (const row of grouped) {
+      if (!row.ipAddress) continue;
+      const item = byIp.get(row.ipAddress) ?? { ipAddress: row.ipAddress, signups: 0, loginFailures: 0, loginBlocked: 0, total: 0, lastAt: null };
+      const count = row._count._all;
+      if (row.action === SIGNUP_AUDIT_ACTION) item.signups += count;
+      if (row.action === LOGIN_FAILED_ACTION) item.loginFailures += count;
+      if (row.action === LOGIN_BLOCKED_ACTION) item.loginBlocked += count;
+      item.total += count;
+      const last = row._max.createdAt;
+      if (last && (!item.lastAt || last > item.lastAt)) item.lastAt = last;
+      byIp.set(row.ipAddress, item);
+    }
+    const auditTop = [...byIp.values()].sort((a, b) => b.total - a.total).slice(0, query.limit);
+    const live = IpActivityService.top({ minutes: query.minutes, limit: query.limit });
+
+    const withBlocked = async <T extends object>(ip: string | null, row: T) => ({
+      ...row,
+      isBlocked: ip ? await IpBlocklistService.isBlocked(ip, this.prisma) : false,
+    });
+
+    return {
+      live: { ...live, top: await Promise.all(live.top.map((row) => withBlocked(row.ip, row))) },
+      audit: {
+        windowHours: query.hours,
+        byIp: await Promise.all(auditTop.map((row) => withBlocked(row.ipAddress, row))),
+        recentSignups: await Promise.all(recentSignups.map((row) => withBlocked(row.ipAddress, row))),
+      },
+    };
   }
 }

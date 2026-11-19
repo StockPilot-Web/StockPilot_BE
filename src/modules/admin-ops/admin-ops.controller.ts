@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
+import { IpBlockActor } from '../../common/services/ip-blocklist.service';
 import { OpsSettingKey } from '../../common/services/ops-settings.service';
 import { TwoFactorService } from '../../common/services/two-factor.service';
 import { AdminOpsService, RequestMeta } from './admin-ops.service';
@@ -8,6 +9,11 @@ function requestMeta(req: Request): RequestMeta {
     ipAddress: req.ip ?? null,
     userAgent: req.headers['user-agent']?.slice(0, 255) ?? null,
   };
+}
+
+/** Actor for IP block writes: includes the proxy hop so a misconfigured range cannot lock everyone out. */
+function ipActor(req: Request): IpBlockActor {
+  return { userId: req.user!.userId, peerAddress: req.socket?.remoteAddress ?? null, ...requestMeta(req) };
 }
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
@@ -43,6 +49,14 @@ export class AdminOpsController {
     (req) => this.service.clearLoginLock(String(req.params.accountKey), req.body.reason, req.user!.userId, requestMeta(req)),
     'Đã gỡ khóa đăng nhập tạm thời'
   );
+
+  getIpBlocks = respond(() => this.service.getIpBlocks());
+  blockIp = respond((req) => this.service.blockIp(req.body, ipActor(req)), 'Đã chặn địa chỉ IP');
+  unblockIp = respond(
+    (req) => this.service.unblockIp(String(req.params.id), req.body.reason, ipActor(req)),
+    'Đã gỡ chặn địa chỉ IP'
+  );
+  getIpActivity = respond((req) => this.service.getIpActivity(req.query as any));
 
   // Payments
   getPaymentHealth = respond((req) => this.service.getPaymentHealth(req.query as any));

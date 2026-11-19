@@ -110,6 +110,9 @@ const envSchema = z
     GENERAL_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
     AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60 * 1000),
     AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+    // Account creation (/auth/send-register-otp, /auth/register): requests per IP per window, each endpoint.
+    SIGNUP_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60 * 60 * 1000),
+    SIGNUP_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(6),
     REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
     KEEP_ALIVE_TIMEOUT_MS: z.coerce.number().int().positive().default(65_000),
     HEADERS_TIMEOUT_MS: z.coerce.number().int().positive().default(66_000),

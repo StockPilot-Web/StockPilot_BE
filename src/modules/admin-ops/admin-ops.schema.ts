@@ -96,3 +96,23 @@ export type GrowthQuery = z.infer<typeof growthQuerySchema>;
 export type SettingHistoryQuery = z.infer<typeof settingHistoryQuerySchema>;
 export type TransferOwnerInput = z.infer<typeof transferOwnerSchema>;
 export type BroadcastInput = z.infer<typeof broadcastSchema>;
+
+// IP blocklist (security incident response)
+export const ipBlockCreateSchema = z
+  .object({
+    ip: z.string().trim().min(2, 'Vui lòng nhập địa chỉ IP hoặc dải CIDR').max(64),
+    reason: reasonSchema,
+    // Omit/null = permanent; max 90 days.
+    expiresInHours: z.number().int().min(1).max(24 * 90).nullable().optional(),
+  })
+  .strict();
+export const ipBlockIdParamSchema = z.object({ id: z.string().uuid('Mã mục chặn không hợp lệ') });
+export const ipBlockRemoveSchema = z.object({ reason: reasonSchema }).strict();
+export const ipActivityQuerySchema = z.object({
+  minutes: z.coerce.number().int().min(1).max(60).default(60),
+  hours: z.coerce.number().int().min(1).max(24 * 7).default(24),
+  limit: z.coerce.number().int().min(1).max(200).default(20),
+});
+
+export type IpBlockCreateInput = z.infer<typeof ipBlockCreateSchema>;
+export type IpActivityQuery = z.infer<typeof ipActivityQuerySchema>;

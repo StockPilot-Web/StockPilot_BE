@@ -6,6 +6,7 @@ export type ErrorCode =
   | 'CONFLICT'
   | 'INSUFFICIENT_STOCK'
   | 'RATE_LIMITED'
+  | 'IP_BLOCKED'
   | 'INTERNAL_ERROR';
 
 export class AppError extends Error {
@@ -62,5 +63,12 @@ export class InsufficientStockError extends AppError {
 export class RateLimitedError extends AppError {
   constructor(message = 'Bạn đã vượt quá giới hạn sử dụng. Vui lòng thử lại sau.', details?: any) {
     super(message, 429, 'RATE_LIMITED', details);
+  }
+}
+
+/** Request rejected because the client IP is on the admin blocklist (see ipBlockMiddleware). */
+export class IpBlockedError extends AppError {
+  constructor(message = 'Truy cập từ địa chỉ IP này đã bị chặn. Liên hệ quản trị viên nếu bạn cho rằng đây là nhầm lẫn.') {
+    super(message, 403, 'IP_BLOCKED');
   }
 }

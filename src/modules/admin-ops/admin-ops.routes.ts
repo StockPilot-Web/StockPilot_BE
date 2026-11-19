@@ -11,6 +11,10 @@ import {
   broadcastSchema,
   clearLockSchema,
   growthQuerySchema,
+  ipActivityQuerySchema,
+  ipBlockCreateSchema,
+  ipBlockIdParamSchema,
+  ipBlockRemoveSchema,
   loginFailureQuerySchema,
   opsSettingKeyParamSchema,
   paymentHealthQuerySchema,
@@ -67,6 +71,17 @@ adminOpsRouter.post(
   validate({ params: accountKeyParamSchema, body: clearLockSchema }),
   controller.clearLoginLock
 );
+
+// Security incident response — IP blocklist and per-IP activity
+adminOpsRouter.get('/security/ip-blocks', controller.getIpBlocks);
+adminOpsRouter.post('/security/ip-blocks', writeLimiter, validate({ body: ipBlockCreateSchema }), controller.blockIp);
+adminOpsRouter.delete(
+  '/security/ip-blocks/:id',
+  writeLimiter,
+  validate({ params: ipBlockIdParamSchema, body: ipBlockRemoveSchema }),
+  controller.unblockIp
+);
+adminOpsRouter.get('/security/ip-activity', validate({ query: ipActivityQuerySchema }), controller.getIpActivity);
 
 // A3 — payment health
 adminOpsRouter.get('/payments/health', validate({ query: paymentHealthQuerySchema }), controller.getPaymentHealth);
