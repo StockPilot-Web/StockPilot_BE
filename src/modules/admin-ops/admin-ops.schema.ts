@@ -116,3 +116,14 @@ export const ipActivityQuerySchema = z.object({
 
 export type IpBlockCreateInput = z.infer<typeof ipBlockCreateSchema>;
 export type IpActivityQuery = z.infer<typeof ipActivityQuerySchema>;
+
+// Hard-delete junk stores that never did business (bulk)
+export const purgeStoresSchema = z
+  .object({
+    storeIds: z.array(z.coerce.number().int().positive()).min(1, 'Chọn ít nhất 1 cửa hàng').max(100, 'Tối đa 100 cửa hàng mỗi lần'),
+    reason: reasonSchema,
+    actorPassword: actorPasswordSchema,
+    dryRun: z.boolean().default(false),
+  })
+  .strict();
+export type PurgeStoresBody = z.infer<typeof purgeStoresSchema>;

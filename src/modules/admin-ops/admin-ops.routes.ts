@@ -18,6 +18,7 @@ import {
   loginFailureQuerySchema,
   opsSettingKeyParamSchema,
   paymentHealthQuerySchema,
+  purgeStoresSchema,
   restoreSettingSchema,
   retentionQuerySchema,
   settingHistoryQuerySchema,
@@ -115,6 +116,9 @@ adminOpsRouter.post(
   validate({ params: storeIdParamSchema, body: transferOwnerSchema }),
   controller.transferStoreOwner
 );
+
+// Delete junk stores that never did business (orders, stock movements, payments...); others: suspend
+adminOpsRouter.post('/stores/purge', writeLimiter, validate({ body: purgeStoresSchema }), controller.purgeStores);
 
 // C1 — data retention report (dry run, read-only)
 adminOpsRouter.get('/data/retention', validate({ query: retentionQuerySchema }), controller.getRetentionReport);

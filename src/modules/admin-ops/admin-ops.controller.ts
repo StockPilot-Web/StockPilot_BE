@@ -3,6 +3,7 @@ import { IpBlockActor } from '../../common/services/ip-blocklist.service';
 import { OpsSettingKey } from '../../common/services/ops-settings.service';
 import { TwoFactorService } from '../../common/services/two-factor.service';
 import { AdminOpsService, RequestMeta } from './admin-ops.service';
+import { StorePurgeService } from './store-purge.service';
 
 function requestMeta(req: Request): RequestMeta {
   return {
@@ -33,7 +34,8 @@ function respond(handler: Handler, message?: string) {
 export class AdminOpsController {
   constructor(
     private readonly service: AdminOpsService = new AdminOpsService(),
-    private readonly twoFactor: TwoFactorService = new TwoFactorService()
+    private readonly twoFactor: TwoFactorService = new TwoFactorService(),
+    private readonly storePurge: StorePurgeService = new StorePurgeService()
   ) {}
 
   // Jobs
@@ -84,6 +86,8 @@ export class AdminOpsController {
     (req) => this.service.transferStoreOwner(Number(req.params.storeId), req.body, req.user!.userId, requestMeta(req)),
     'Đã chuyển quyền chủ cửa hàng và thu hồi phiên đăng nhập liên quan'
   );
+
+  purgeStores = respond((req) => this.storePurge.purge(req.body, req.user!.userId, requestMeta(req)));
 
   // Data retention (dry run)
   getRetentionReport = respond((req) => this.service.getRetentionReport(req.query as any));
