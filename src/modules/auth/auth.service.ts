@@ -21,6 +21,7 @@ import { isValidTenantCode, normalizeTenantCode } from '../../common/utils/tenan
 import { SignupEmailPolicyService } from '../../common/services/signup-email-policy.service';
 import { sendPasswordResetOtpEmail, sendRegisterOtpEmail } from '../../common/services/email.service';
 import { sendPasswordResetOtpSms } from '../../common/services/sms.service';
+import { TurnstileService } from '../../common/services/turnstile.service';
 
 // Store in-memory OTPs for registration verification (email -> { otp, expiresAt })
 const registerOtpStore = new Map<string, { otp: string; expiresAt: Date }>();
@@ -32,8 +33,20 @@ export class AuthService {
     this.prisma = customPrisma || defaultPrisma;
   }
 
-  async sendRegisterOtp(input: z.infer<typeof sendRegisterOtpSchema>) {
+  async sendRegisterOtp(
+    input: z.infer<typeof sendRegisterOtpSchema>,
+    meta?: { clientIp?: string }
+  ) {
     await this.assertSignupEnabled();
+
+    // 0. Xác thực bảo vệ CAPTCHA (chống spam, bot account, DDoS SMTP)
+    if (env.TURNSTILE_SECRET_KEY && process.env.NODE_ENV !== 'test') {
+      const captchaRes = await TurnstileService.verify(input.turnstileToken, meta?.clientIp);
+      if (!captchaRes.success) {
+        throw new ValidationError(captchaRes.error || 'Xác thực bảo mật CAPTCHA không thành công');
+      }
+    }
+
     const email = input.email.toLowerCase().trim();
     await SignupEmailPolicyService.assertAllowed(email, this.prisma);
 
@@ -92,6 +105,15 @@ export class AuthService {
     meta?: { userAgent?: string; ipAddress?: string; deviceId?: string | null; fingerprint?: string | null }
   ) {
     await this.assertSignupEnabled();
+
+    // 0. Kiểm tra token CAPTCHA nếu client gửi kèm trong payload đăng ký
+    if (env.TURNSTILE_SECRET_KEY && process.env.NODE_ENV !== 'test' && input.turnstileToken) {
+      const captchaRes = await TurnstileService.verify(input.turnstileToken, meta?.ipAddress);
+      if (!captchaRes.success) {
+        throw new ValidationError(captchaRes.error || 'Xác thực bảo mật CAPTCHA không thành công');
+      }
+    }
+
     const email = input.email.toLowerCase().trim();
     await SignupEmailPolicyService.assertAllowed(email, this.prisma);
 
