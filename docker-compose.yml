@@ -65,6 +65,7 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_URL: ${VITE_API_URL:-/api/v1}
+        VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:-0x4AAAAAAGKQwwkHx1iwiUAv}
     container_name: stockpilot-frontend
     restart: always
     depends_on:

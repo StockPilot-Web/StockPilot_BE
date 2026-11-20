@@ -143,6 +143,7 @@ const envSchema = z
     AI_MAX_STORAGE_GB: z.coerce.number().positive().default(100),
     AI_SQLITE_DB_PATH: z.string().default('D:/AI_Memory/db/ai-brain.sqlite'),
     GEMINI_EMBEDDING_MODEL: z.string().default('models/gemini-embedding-001'),
+    TURNSTILE_SECRET_KEY: z.preprocess((value) => (value === '' ? undefined : value), z.string().optional()),
   })
   .refine(
     (data) => {

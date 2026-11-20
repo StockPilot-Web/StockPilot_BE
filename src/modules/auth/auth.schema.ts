@@ -14,6 +14,7 @@ export const sendRegisterOtpSchema = z.object({
         'Mã cửa hàng phải là slug DNS hợp lệ: chữ cái thường, số hoặc dấu gạch ngang, không bắt đầu/kết thúc bằng dấu gạch ngang và không dùng tên hệ thống',
     })
     .optional(),
+  turnstileToken: z.string().optional(),
 });
 
 export const registerSchema = z.object({
@@ -33,6 +34,7 @@ export const registerSchema = z.object({
   phone: z.string().optional(),
   address: z.string().optional(),
   otp: z.string().min(4, 'Mã OTP không hợp lệ').max(10, 'Mã OTP không hợp lệ').optional(),
+  turnstileToken: z.string().optional(),
 });
 
 export const loginSchema = z.object({
