@@ -9,6 +9,8 @@ import { sensitiveFieldsMiddleware } from './common/middleware/sensitive-fields'
 import { errorHandler } from './common/middleware/error-handler';
 import { requestLoggerMiddleware } from './common/middleware/request-logger';
 import { tenantResolverMiddleware } from './common/middleware/tenant';
+import { ipBlockMiddleware } from './common/middleware/ip-block';
+import { createSignupRateLimiter } from './common/middleware/signup-rate-limit';
 import { logger } from './common/logger';
 
 // Routers
@@ -41,8 +43,19 @@ import { storeDataRouter } from './modules/store-data/store-data.routes';
 import { taxSupportRouter } from './modules/tax-support/tax-support.routes';
 import { adminSupportRouter, supportRouter } from './modules/support/support.routes';
 
-export function createApp(): Express {
+export interface CreateAppOptions {
+  /** Check the admin IP blocklist on every request. Default: on, except in automated tests. */
+  ipBlock?: boolean;
+  /** Per-IP limit for account creation; false disables it. Default: env values, off in automated tests. */
+  signupRateLimit?: { windowMs: number; max: number } | false;
+}
+
+export function createApp(options: CreateAppOptions = {}): Express {
   const app = express();
+  const isTest = env.NODE_ENV === 'test';
+  const ipBlockEnabled = options.ipBlock ?? !isTest;
+  const signupRateLimit =
+    options.signupRateLimit ?? (isTest ? false : { windowMs: env.SIGNUP_RATE_LIMIT_WINDOW_MS, max: env.SIGNUP_RATE_LIMIT_MAX });
 
   app.set('trust proxy', env.TRUST_PROXY);
 
@@ -92,6 +105,8 @@ export function createApp(): Express {
   // Request ID, request telemetry, and sensitive data masking
   app.use(requestIdMiddleware);
   app.use(requestLoggerMiddleware);
+  // Blocked IPs are rejected here (after the logger, so they still show up in IP activity).
+  if (ipBlockEnabled) app.use(ipBlockMiddleware);
   app.use(sensitiveFieldsMiddleware);
 
   // Root ping endpoint
@@ -225,6 +240,11 @@ export function createApp(): Express {
     );
   }
   app.use('/api/v1/public', publicRouter);
+  if (signupRateLimit) {
+    // Separate counters so resending an OTP does not use up the register attempts.
+    app.use('/api/v1/auth/send-register-otp', createSignupRateLimiter(signupRateLimit));
+    app.use('/api/v1/auth/register', createSignupRateLimiter(signupRateLimit));
+  }
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/users', userRouter);
   app.use('/api/v1/categories', categoryRouter);

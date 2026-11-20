@@ -1,13 +1,28 @@
 import { NextFunction, Request, Response } from 'express';
+import { IpBlockActor } from '../../common/services/ip-blocklist.service';
+import { DeviceBlockActor } from '../../common/services/device-blocklist.service';
+import { readDeviceIdentity } from '../../common/utils/device-identity';
 import { OpsSettingKey } from '../../common/services/ops-settings.service';
 import { TwoFactorService } from '../../common/services/two-factor.service';
 import { AdminOpsService, RequestMeta } from './admin-ops.service';
+import { StorePurgeService } from './store-purge.service';
+import { SignupEmailPolicyService, SUGGESTED_ALLOWED_DOMAINS } from '../../common/services/signup-email-policy.service';
 
 function requestMeta(req: Request): RequestMeta {
   return {
     ipAddress: req.ip ?? null,
     userAgent: req.headers['user-agent']?.slice(0, 255) ?? null,
   };
+}
+
+/** Actor for IP block writes: includes the proxy hop so a misconfigured range cannot lock everyone out. */
+function ipActor(req: Request): IpBlockActor {
+  return { userId: req.user!.userId, peerAddress: req.socket?.remoteAddress ?? null, ...requestMeta(req) };
+}
+
+/** Actor for device block writes: includes the admin's own device so it cannot be blocked by mistake. */
+function deviceActor(req: Request): DeviceBlockActor {
+  return { userId: req.user!.userId, device: readDeviceIdentity(req), ...requestMeta(req) };
 }
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
@@ -27,7 +42,8 @@ function respond(handler: Handler, message?: string) {
 export class AdminOpsController {
   constructor(
     private readonly service: AdminOpsService = new AdminOpsService(),
-    private readonly twoFactor: TwoFactorService = new TwoFactorService()
+    private readonly twoFactor: TwoFactorService = new TwoFactorService(),
+    private readonly storePurge: StorePurgeService = new StorePurgeService()
   ) {}
 
   // Jobs
@@ -43,6 +59,20 @@ export class AdminOpsController {
     (req) => this.service.clearLoginLock(String(req.params.accountKey), req.body.reason, req.user!.userId, requestMeta(req)),
     'Đã gỡ khóa đăng nhập tạm thời'
   );
+
+  getIpBlocks = respond(() => this.service.getIpBlocks());
+  blockIp = respond((req) => this.service.blockIp(req.body, ipActor(req)), 'Đã chặn địa chỉ IP');
+  unblockIp = respond(
+    (req) => this.service.unblockIp(String(req.params.id), req.body.reason, ipActor(req)),
+    'Đã gỡ chặn địa chỉ IP'
+  );
+  getDeviceBlocks = respond(() => this.service.getDeviceBlocks());
+  blockDevice = respond((req) => this.service.blockDevice(req.body, deviceActor(req)), 'Đã chặn thiết bị');
+  unblockDevice = respond(
+    (req) => this.service.unblockDevice(String(req.params.id), req.body.reason, deviceActor(req)),
+    'Đã gỡ chặn thiết bị'
+  );
+  getIpActivity = respond((req) => this.service.getIpActivity(req.query as any));
 
   // Payments
   getPaymentHealth = respond((req) => this.service.getPaymentHealth(req.query as any));
@@ -70,6 +100,19 @@ export class AdminOpsController {
     (req) => this.service.transferStoreOwner(Number(req.params.storeId), req.body, req.user!.userId, requestMeta(req)),
     'Đã chuyển quyền chủ cửa hàng và thu hồi phiên đăng nhập liên quan'
   );
+
+  purgeStores = respond((req) =>
+    this.storePurge.purge(req.body, {
+      userId: req.user!.userId,
+      peerAddress: req.socket?.remoteAddress ?? null,
+      device: readDeviceIdentity(req),
+      ...requestMeta(req),
+    })
+  );
+  getSignupEmailPolicy = respond(async () => ({
+    ...(await SignupEmailPolicyService.load()),
+    suggestedAllowlist: SUGGESTED_ALLOWED_DOMAINS,
+  }));
 
   // Data retention (dry run)
   getRetentionReport = respond((req) => this.service.getRetentionReport(req.query as any));

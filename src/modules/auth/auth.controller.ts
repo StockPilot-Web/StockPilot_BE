@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { readDeviceIdentity } from '../../common/utils/device-identity';
 import { AuthService } from './auth.service';
 
 export class AuthController {
@@ -26,6 +27,7 @@ export class AuthController {
       const meta = {
         userAgent: req.headers['user-agent'],
         ipAddress: req.ip || req.socket.remoteAddress,
+        ...readDeviceIdentity(req),
       };
       const result = await this.authService.registerOwner(req.body, meta);
       return res.status(201).json({
