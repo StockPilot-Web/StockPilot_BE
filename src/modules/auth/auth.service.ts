@@ -23,8 +23,8 @@ import { sendPasswordResetOtpEmail, sendRegisterOtpEmail } from '../../common/se
 import { sendPasswordResetOtpSms } from '../../common/services/sms.service';
 import { TurnstileService } from '../../common/services/turnstile.service';
 
-// Store in-memory OTPs for registration verification (email -> { otp, expiresAt })
-const registerOtpStore = new Map<string, { otp: string; expiresAt: Date }>();
+// Store in-memory OTPs for registration verification (email -> { otp, expiresAt, sentAt, attempts })
+const registerOtpStore = new Map<string, { otp: string; expiresAt: Date; sentAt: number; attempts: number }>();
 
 export class AuthService {
   private prisma: PrismaClient;
@@ -72,12 +72,24 @@ export class AuthService {
       }
     }
 
-    // 3. Sinh OTP 6 chữ số ngẫu nhiên
+    // 3. Kiểm tra cooldown 60 giây nếu vừa gửi OTP cho email này (chống spam flooding)
+    const existingOtp = registerOtpStore.get(email);
+    if (
+      existingOtp &&
+      existingOtp.expiresAt > new Date() &&
+      Date.now() - existingOtp.sentAt < 60_000 &&
+      process.env.NODE_ENV !== 'test'
+    ) {
+      const waitSeconds = Math.ceil((60_000 - (Date.now() - existingOtp.sentAt)) / 1000);
+      throw new ValidationError(`Vui lòng đợi ${waitSeconds} giây trước khi yêu cầu gửi lại mã OTP.`);
+    }
+
+    // Sinh OTP 6 chữ số ngẫu nhiên
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 phút
 
-    // Lưu vào bộ nhớ
-    registerOtpStore.set(email, { otp, expiresAt });
+    // Lưu vào bộ nhớ kèm thời gian gửi và khởi tạo số lần thử
+    registerOtpStore.set(email, { otp, expiresAt, sentAt: Date.now(), attempts: 0 });
 
     // 4. Gửi email chứa mã OTP
     const emailResult = await sendRegisterOtpEmail({
@@ -126,7 +138,16 @@ export class AuthService {
       }
 
       if (stored.otp !== input.otp.trim()) {
-        throw new ValidationError('Mã OTP xác thực không chính xác. Vui lòng kiểm tra lại hộp thư email');
+        stored.attempts = (stored.attempts || 0) + 1;
+        if (stored.attempts >= 5) {
+          registerOtpStore.delete(email);
+          throw new ValidationError(
+            'Bạn đã nhập sai mã OTP quá 5 lần. Mã xác thực đã bị hủy để đảm bảo an toàn. Vui lòng bấm gửi lại mã OTP mới.'
+          );
+        }
+        throw new ValidationError(
+          `Mã OTP xác thực không chính xác (còn ${5 - stored.attempts} lần thử). Vui lòng kiểm tra lại hộp thư email`
+        );
       }
       registerOtpStore.delete(email);
     } else if (process.env.NODE_ENV === 'production') {
