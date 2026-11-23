@@ -18,10 +18,15 @@ export const sendRegisterOtpSchema = z.object({
 });
 
 export const registerSchema = z.object({
-  fullName: z.string().min(2, 'Họ tên phải có ít nhất 2 ký tự'),
-  email: z.string().email('Email không đúng định dạng'),
-  password: z.string().min(8, 'Mật khẩu phải có ít nhất 8 ký tự'),
-  storeName: z.string().min(2, 'Tên cửa hàng phải có ít nhất 2 ký tự'),
+  fullName: z.string().trim().min(2, 'Họ tên phải có ít nhất 2 ký tự'),
+  email: z.string().trim().email('Email không đúng định dạng'),
+  password: z
+    .string()
+    .min(8, 'Mật khẩu phải có ít nhất 8 ký tự')
+    .refine((val) => !/\s/.test(val), {
+      message: 'Mật khẩu không được chứa khoảng trắng',
+    }),
+  storeName: z.string().trim().min(2, 'Tên cửa hàng phải có ít nhất 2 ký tự'),
   storeCode: z
     .string()
     .min(2, 'Mã cửa hàng phải có ít nhất 2 ký tự')
@@ -41,8 +46,8 @@ export const loginSchema = z.object({
   email: z.string().trim().email('Email không đúng định dạng'),
   password: z
     .string()
-    .refine((val) => val.trim().length > 0, {
-      message: 'Mật khẩu không được để trống hoặc chỉ chứa khoảng trắng',
+    .refine((val) => val.trim().length > 0 && !/\s/.test(val), {
+      message: 'Mật khẩu không được để trống hoặc chứa khoảng trắng',
     }),
   /** Mã 2FA (6 số) hoặc mã khôi phục — chỉ cần với admin đã bật xác thực 2 lớp. */
   otpCode: z.string().trim().max(20).optional(),
@@ -79,22 +84,32 @@ export const verifyOtpSchema = z.object({
 
 export const resetPasswordSchema = z.object({
   token: z.string().min(6).optional(),
-  email: z.string().email('Email không đúng định dạng').optional(),
+  email: z.string().trim().email('Email không đúng định dạng').optional(),
   phone: z.string().min(9, 'Số điện thoại phải có ít nhất 9 chữ số').max(20, 'Số điện thoại không hợp lệ').optional(),
   otp: z.string().min(4).max(10).optional(),
-  newPassword: z.string().min(8, 'Mật khẩu phải có ít nhất 8 ký tự'),
+  newPassword: z
+    .string()
+    .min(8, 'Mật khẩu phải có ít nhất 8 ký tự')
+    .refine((val) => !/\s/.test(val), {
+      message: 'Mật khẩu không được chứa khoảng trắng',
+    }),
 }).refine((data) => Boolean(data.token) || (Boolean(data.email || data.phone) && Boolean(data.otp)), {
   message: 'Cần cung cấp token hoặc email/số điện thoại cùng mã OTP',
 });
 
 export const updateStoreSchema = z.object({
-  storeName: z.string().min(2, 'Tên cửa hàng phải có ít nhất 2 ký tự').optional(),
+  storeName: z.string().trim().min(2, 'Tên cửa hàng phải có ít nhất 2 ký tự').optional(),
   phone: z.string().optional(),
   address: z.string().optional(),
 });
 
 export const changePasswordSchema = z.object({
   oldPassword: z.string().min(1, 'Mật khẩu cũ không được để trống'),
-  newPassword: z.string().min(8, 'Mật khẩu mới phải có ít nhất 8 ký tự'),
+  newPassword: z
+    .string()
+    .min(8, 'Mật khẩu phải có ít nhất 8 ký tự')
+    .refine((val) => !/\s/.test(val), {
+      message: 'Mật khẩu không được chứa khoảng trắng',
+    }),
 });
 
