@@ -14,6 +14,8 @@ notificationRouter.use(authMiddleware);
 notificationRouter.use(requireStoreScope);
 notificationRouter.use(requireRole(...storeOperatorRoles));
 
+notificationRouter.post('/push-token', (req, res, next) => controller.registerPushToken(req, res, next));
+notificationRouter.post('/test-push', (req, res, next) => controller.testPush(req, res, next));
 notificationRouter.get('/settings', (req, res, next) => controller.getSettings(req, res, next));
 notificationRouter.put('/settings', (req, res, next) => controller.updateSettings(req, res, next));
 notificationRouter.get('/', validate({ query: notificationListQuerySchema }), (req, res, next) =>

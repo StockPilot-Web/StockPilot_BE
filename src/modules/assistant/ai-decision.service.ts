@@ -8,6 +8,7 @@ import { AssistantService, FINANCIAL_DATA_RESTRICTED_MESSAGE, normalizeVietnames
 import { aiMemoryService } from './ai-memory.service';
 import { LlmFailureReason, LlmResult, LlmUnavailableError, OpenAiClient } from './llm/openai-client';
 import { rankSuggestions, ReorderCandidate } from './suggestion-ranking';
+import { MultiAgentOrchestrator } from './agents/multi-agent.orchestrator';
 
 export type { ActionSuggestion, SuggestionKind } from './suggestion-ranking';
 
@@ -792,15 +793,31 @@ export class AiDecisionService {
     // Fetch rich store data for grounding
     const storeContext = await this.getStoreContext(storeId, role, stockItemId);
 
-    const taskPrompt = canSeeFinancials
-      ? 'Hãy đóng vai trò một Trợ lý Cá nhân AI đắc lực, thông minh và tận tâm của Chủ cửa hàng. Trả lời CHÍNH XÁC và TRỰC TIẾP vào những gì người dùng hỏi. ĐẶC BIỆT KHI HỎI VỀ "quản lý kho", "thông tin kho", "tình trạng kho", "tồn kho", "hết hàng", "sắp hết hàng", "tồn nhiều", "nhiều tồn": BẮT BUỘC hiểu đây là Phân hệ Quản lý kho hàng & Tồn kho (trang Quản lý kho trên ứng dụng). Báo cáo đầy đủ 4 thẻ KPI trụ cột từ liveStoreSnapshot.inventoryOverview.warehouseKpis (1. Giá trị tồn kho / Tổng vốn trong kho; 2. Hết hàng kèm tên sản phẩm; 3. Sắp hết hàng kèm tên sản phẩm; 4. Tồn nhiều kèm ví dụ sản phẩm). TUYỆT ĐỐI KHÔNG bàn về nhân sự hay phân quyền nhân viên. Khi trích dẫn tổng giá trị tồn kho hoặc tổng số lượng sản phẩm trong kho, luôn trích dẫn con số tổng thể trong liveStoreSnapshot.inventoryOverview.warehouseKpis (ví dụ: tổng giá trị tồn kho là inventoryOverview.warehouseKpis.totalInventoryCostValueFormatted trên tổng số sản phẩm vật lý inventoryOverview.warehouseKpis.totalPhysicalUnits). Nếu người dùng chỉ hỏi ngày tháng, chào hỏi hoặc thông tin cụ thể, CHỈ trả lời đúng câu hỏi đó một cách lịch sự, tự nhiên và KHÔNG tự động chèn báo cáo hay cảnh báo không liên quan. Ở cuối câu trả lời, hãy luôn hỏi mở 1 câu gợi ý hỗ trợ thông minh sẵn sàng giúp đỡ ngay (ví dụ: "Anh/chị cần em hỗ trợ kiểm tra đơn hàng, xem tồn kho hay việc gì khác không ạ? Em có thể giúp anh/chị ngay đấy ạ!"). Khi người dùng yêu cầu tư vấn kinh doanh hoặc hỏi tình hình kho, mới phân tích chi tiết dựa trên <store_data>.'
-      : 'Đóng vai trò Trợ lý Kho AI. Khi hỏi về quản lý kho, tồn kho, hết hàng, sắp hết hàng, tồn nhiều: Báo cáo chính xác 3 chỉ số số lượng (Hết hàng, Sắp hết, Tồn nhiều) và tổng số lượng sản phẩm vật lý từ inventoryOverview.warehouseKpis. Tuyệt đối không bàn luận về giá vốn hay lợi nhuận, và không bàn luận về phân quyền nhân sự.';
+    // 2. Kích hoạt Hệ thống Đa Tác tử (Multi-Agent System):
+    // - Router Agent: Phân loại ý định (Kho / Giá & Tài chính / Chiến lược / Chat chung)
+    // - Inventory Agent & Pricing Agent: Rút trích số liệu chuyên môn tương ứng
+    // - Synthesizer Agent: Tổng hợp kết quả, thực hiện Critic Check chống lộ dữ liệu
+    const agentPlan = MultiAgentOrchestrator.run({
+      storeId,
+      question,
+      normalizedQuestion: ask,
+      role,
+      userId,
+      stockItemId,
+      canSeeFinancials,
+      storeContext,
+      ruleBasedAnalysis: {
+        summaryAnswer: base.answer,
+        dataSnapshot: base.dataSnapshot ?? null,
+      },
+    });
 
     const ai = await this.tryComplete(storeId, userId, 'CHAT', ask, {
-      instructions: instructionsFor(role, taskPrompt),
+      instructions: agentPlan.instructions,
       input: [
         `Thời gian hiện tại: ${new Date().toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`,
         `Câu hỏi / Yêu cầu từ người dùng: ${ask}`,
+        `[Phân loại Tác tử / Multi-Agent Intent]: ${agentPlan.intent}`,
         '',
         '<store_data>',
         JSON.stringify(
@@ -810,6 +827,7 @@ export class AiDecisionService {
               summaryAnswer: base.answer,
               dataSnapshot: base.dataSnapshot ?? null,
             },
+            specialistInsights: agentPlan.specialists,
           },
           (_k, v) => (typeof v === 'bigint' ? Number(v) : v),
           2
