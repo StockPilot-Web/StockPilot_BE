@@ -23,6 +23,11 @@ describe('Multi-Agent System (Tier 1 AI)', () => {
       expect(RouterAgent.classify('Tư vấn chiến lược kinh doanh và combo kích cầu')).toBe('BUSINESS_STRATEGY');
     });
 
+    it('định tuyến câu hỏi thuế vào luồng kết hợp nội bộ + AI bên ngoài', () => {
+      expect(RouterAgent.classify('Doanh thu cửa hàng đã vượt ngưỡng hóa đơn điện tử chưa?')).toBe('TAX_SUPPORT');
+      expect(RouterAgent.classify('Tôi cần xem sổ doanh thu S1a')).toBe('TAX_SUPPORT');
+    });
+
     it('phân loại câu chào hỏi thông thường vào General Chat', () => {
       expect(RouterAgent.classify('Xin chào, bạn tên là gì?')).toBe('GENERAL_CHAT');
       expect(RouterAgent.classify('Hôm nay là thứ mấy?')).toBe('GENERAL_CHAT');

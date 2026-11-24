@@ -7,7 +7,17 @@ export class RouterAgent {
   public static classify(question: string): AgentIntent {
     const q = question.toLowerCase().trim();
 
-    // 1. Nhận diện từ khóa Chiến lược Kinh doanh / Đa lĩnh vực (Hybrid)
+    // 1. Luồng kết hợp: số liệu thuế lấy từ StockPilot, phần giải thích có thể nhờ LLM bên ngoài.
+    const taxKeywords = [
+      'thuế', 'thue', 'hóa đơn điện tử', 'hoa don dien tu', 'hóa đơn máy tính tiền',
+      'hoa don may tinh tien', 'ngưỡng doanh thu', 'nguong doanh thu', 'sổ doanh thu',
+      'so doanh thu', 's1a', 's2a', 'hộ kinh doanh', 'ho kinh doanh', 'kê khai', 'ke khai',
+    ];
+    if (taxKeywords.some((k) => q.includes(k))) {
+      return 'TAX_SUPPORT';
+    }
+
+    // 2. Nhận diện từ khóa Chiến lược Kinh doanh / Đa lĩnh vực (Hybrid)
     const strategyKeywords = [
       'chiến lược', 'tư vấn', 'lập kế hoạch', 'kế hoạch', 'làm sao để',
       'combo', 'kích cầu', 'livestream', 'đề xuất toàn diện', 'tối ưu cửa hàng',
@@ -17,7 +27,7 @@ export class RouterAgent {
       return 'BUSINESS_STRATEGY';
     }
 
-    // 2. Nhận diện từ khóa Phân hệ Kho & Tồn kho
+    // 3. Nhận diện từ khóa Phân hệ Kho & Tồn kho
     const inventoryKeywords = [
       'kho', 'tồn kho', 'tồn', 'hết hàng', 'sắp hết', 'sắp hết hàng',
       'nhiều tồn', 'tồn nhiều', 'vốn đọng', 'nhập hàng', 'phiếu nhập',
@@ -25,7 +35,7 @@ export class RouterAgent {
     ];
     const hasInventory = inventoryKeywords.some((k) => q.includes(k));
 
-    // 3. Nhận diện từ khóa Tài chính, Giá bán & Doanh số
+    // 4. Nhận diện từ khóa Tài chính, Giá bán & Doanh số
     const financialKeywords = [
       'doanh thu', 'doanh số', 'lợi nhuận', 'giá bán', 'giá vốn', 'cogs',
       'biên lợi nhuận', 'chiết khấu', 'khuyến mãi', 'giảm giá', 'tháng',
@@ -43,7 +53,7 @@ export class RouterAgent {
       return 'PRICING_FINANCE';
     }
 
-    // 4. Các câu hỏi chào hỏi, ngày giờ, hoặc hỗ trợ thông thường
+    // 5. Các câu hỏi chào hỏi, ngày giờ, hoặc hỗ trợ thông thường
     return 'GENERAL_CHAT';
   }
 }
