@@ -4,6 +4,7 @@ import { DecisionEngineService } from '../decision-engine/decision-engine.servic
 import { toOverviewSummaryView, toSkuDecisionView } from '../decision-engine/decision-view';
 import { toNumber } from '../../common/utils/decimal';
 import { canViewFinancials } from '../../common/utils/role-access';
+import { TaxSupportService } from '../tax-support/tax-support.service';
 
 function formatVND(n: number): string {
   return Math.round(n).toLocaleString('vi-VN') + ' đ';
@@ -48,7 +49,8 @@ export function normalizeVietnameseVoiceQuery(text: string): string {
 export class AssistantService {
   constructor(
     private readonly prisma: PrismaClient = defaultPrisma,
-    private readonly decisionEngineService: DecisionEngineService = new DecisionEngineService(prisma)
+    private readonly decisionEngineService: DecisionEngineService = new DecisionEngineService(prisma),
+    private readonly taxSupportService: TaxSupportService = new TaxSupportService(prisma)
   ) {}
 
   /**
@@ -405,6 +407,48 @@ export class AssistantService {
       answer: FINANCIAL_DATA_RESTRICTED_MESSAGE,
       actionLinks: [{ label: 'Xem cảnh báo rủi ro', url: '/alerts' }],
     });
+
+    const taxKeywords = [
+      'thuế', 'thue', 'hóa đơn điện tử', 'hoa don dien tu', 'hóa đơn máy tính tiền',
+      'hoa don may tinh tien', 'ngưỡng doanh thu', 'nguong doanh thu', 'sổ doanh thu',
+      'so doanh thu', 's1a', 's2a', 'hộ kinh doanh', 'ho kinh doanh', 'kê khai', 'ke khai',
+    ];
+    if (taxKeywords.some((keyword) => q.includes(keyword))) {
+      if (!canSeeFinancials) return restricted();
+
+      const taxSupport = await this.taxSupportService.getRevenueThreshold(storeId);
+      const levelText: Record<string, string> = {
+        NONE: 'Chưa chạm ngưỡng và chưa có dấu hiệu dự báo vượt ngưỡng.',
+        WATCH: 'Đang ở mức cần theo dõi vì đã đạt khoảng 70% ngưỡng hoặc dự báo có thể vượt ngưỡng.',
+        WARNING: 'Đã ở mức cảnh báo cao vì đã đạt khoảng 90% ngưỡng.',
+        REACHED: 'Đã đạt/vượt ngưỡng doanh thu hiện tại.',
+        PRIOR_YEAR_REACHED: 'Năm trước đã đạt/vượt ngưỡng; cần đối chiếu nghĩa vụ hiện hành với kế toán/cơ quan thuế.',
+      };
+      const ratio = `${(taxSupport.ratio * 100).toFixed(1)}%`;
+      const forecast = taxSupport.forecast.projectedYearEnd == null
+        ? 'Chưa đủ dữ liệu để dự báo cuối năm.'
+        : `Dự báo cuối năm: **${formatVND(taxSupport.forecast.projectedYearEnd)}**${taxSupport.forecast.projectedCrossDate ? `, có thể chạm ngưỡng vào khoảng **${taxSupport.forecast.projectedCrossDate}**` : ''}.`;
+
+      return {
+        answer: [
+          '### 🧾 TÌNH HÌNH THUẾ & HÓA ĐƠN ĐIỆN TỬ',
+          `- **Doanh thu lũy kế năm ${taxSupport.year}:** **${formatVND(taxSupport.ytdRevenue)}**`,
+          `- **Ngưỡng đang cấu hình:** **${formatVND(taxSupport.threshold)}**`,
+          `- **Tỷ lệ đã đạt:** **${ratio}**`,
+          `- **Trạng thái:** ${levelText[taxSupport.level] ?? taxSupport.level}`,
+          taxSupport.crossedOn ? `- **Ngày chạm ngưỡng:** **${taxSupport.crossedOn}**` : '',
+          taxSupport.registrationDeadlineHint ? `- **Hạn gợi ý đăng ký:** **${taxSupport.registrationDeadlineHint}**` : '',
+          `- ${forecast}`,
+          '',
+          '**Lưu ý:** Đây là số liệu hỗ trợ dựa trên doanh thu ghi nhận trong StockPilot, không thay thế tư vấn kế toán hoặc kết luận của cơ quan thuế.',
+        ].filter(Boolean).join('\n'),
+        actionLinks: [
+          { label: 'Xem ngưỡng doanh thu', url: '/dashboard' },
+          { label: 'Mở sổ doanh thu', url: '/analytics' },
+        ],
+        dataSnapshot: { taxSupport },
+      };
+    }
 
     // Direct SKU explanation if stockItemId provided
     if (targetStockItemId) {

@@ -42,6 +42,10 @@ export class MultiAgentOrchestrator {
         specialists.push(invInsight, pricingInsight);
         break;
       }
+      case 'TAX_SUPPORT':
+        // Dữ liệu thuế đã được lấy bởi AssistantService từ TaxSupportService.
+        // Không gọi thêm agent truy vấn DB để tránh lệch số liệu và truy vấn trùng.
+        break;
       case 'GENERAL_CHAT':
       default:
         // Với hội thoại thông thường, không cần nạp phân tích sâu
