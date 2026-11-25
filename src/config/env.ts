@@ -194,12 +194,24 @@ if (!parsedEnv.success) {
   process.exit(1);
 }
 
+if (parsedEnv.data.NODE_ENV !== 'test') {
+  const requiredRuntimeSecrets = [
+    ['DATABASE_URL', parsedEnv.data.DATABASE_URL],
+    ['JWT_SECRET', parsedEnv.data.JWT_SECRET],
+    ['JWT_REFRESH_SECRET', parsedEnv.data.JWT_REFRESH_SECRET],
+    ['PAYMENT_CONFIG_ENCRYPTION_KEY', parsedEnv.data.PAYMENT_CONFIG_ENCRYPTION_KEY],
+  ].filter(([, value]) => !value);
+
+  if (requiredRuntimeSecrets.length > 0) {
+    process.stderr.write(`Missing required runtime environment variables: ${requiredRuntimeSecrets.map(([name]) => name).join(', ')}\n`);
+    process.exit(1);
+  }
+}
+
 export const env = {
   ...parsedEnv.data,
-  DATABASE_URL: parsedEnv.data.DATABASE_URL || 'mysql://root:password@127.0.0.1:3306/stockpilot',
-  JWT_SECRET: parsedEnv.data.JWT_SECRET || 'stockpilot-secret-jwt-key-2026',
-  JWT_REFRESH_SECRET: parsedEnv.data.JWT_REFRESH_SECRET || 'stockpilot-secret-refresh-key-2026',
-  PAYMENT_CONFIG_ENCRYPTION_KEY:
-    parsedEnv.data.PAYMENT_CONFIG_ENCRYPTION_KEY ||
-    '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  DATABASE_URL: parsedEnv.data.DATABASE_URL || '',
+  JWT_SECRET: parsedEnv.data.JWT_SECRET || '',
+  JWT_REFRESH_SECRET: parsedEnv.data.JWT_REFRESH_SECRET || '',
+  PAYMENT_CONFIG_ENCRYPTION_KEY: parsedEnv.data.PAYMENT_CONFIG_ENCRYPTION_KEY || '',
 };

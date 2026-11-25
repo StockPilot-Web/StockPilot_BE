@@ -5,6 +5,7 @@ import { requireRole, requireStoreScope } from '../../common/middleware/rbac';
 import { validate } from '../../common/middleware/validate';
 import { createProductSchema, updateProductSchema } from './product.schema';
 import { productListQuerySchema, idParamSchema } from '../../common/utils/pagination';
+import { ForbiddenError } from '../../common/errors/app-error';
 
 export const productRouter = Router();
 const controller = new ProductController();
@@ -17,5 +18,16 @@ productRouter.get('/:id', validate({ params: idParamSchema }), (req, res, next) 
 
 // Mutating endpoints: SHOP_OWNER and WAREHOUSE_STAFF can create and update products; only SHOP_OWNER can delete
 productRouter.post('/', requireRole('SHOP_OWNER', 'WAREHOUSE_STAFF'), validate({ body: createProductSchema }), (req, res, next) => controller.create(req, res, next));
-productRouter.put('/:id', requireRole('SHOP_OWNER', 'WAREHOUSE_STAFF'), validate({ params: idParamSchema, body: updateProductSchema }), (req, res, next) => controller.update(req, res, next));
+productRouter.put(
+  '/:id',
+  requireRole('SHOP_OWNER', 'WAREHOUSE_STAFF'),
+  (req, _res, next) => {
+    if (req.user?.role === 'WAREHOUSE_STAFF' && Object.prototype.hasOwnProperty.call(req.body ?? {}, 'costPrice')) {
+      return next(new ForbiddenError('Nhân viên kho không được phép thay đổi giá vốn'));
+    }
+    return next();
+  },
+  validate({ params: idParamSchema, body: updateProductSchema }),
+  (req, res, next) => controller.update(req, res, next)
+);
 productRouter.delete('/:id', requireRole('SHOP_OWNER'), validate({ params: idParamSchema }), (req, res, next) => controller.delete(req, res, next));

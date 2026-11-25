@@ -6,6 +6,30 @@ import { prisma as defaultPrisma } from '../../config/db';
 import { NotFoundError, ValidationError } from '../../common/errors/app-error';
 import { StockLedgerService } from '../inventory/stock-ledger.service';
 import { BusinessSyncService } from '../../common/services/business-sync.service';
+import { SecretEncryptionService } from '../../common/services/secret-encryption.service';
+
+const MOMO_CREATE_ENDPOINT = 'https://payment.momo.vn/v2/gateway/api/create';
+const MOMO_QUERY_ENDPOINT = 'https://payment.momo.vn/v2/gateway/api/query';
+
+function assertAllowedMomoEndpoint(value: unknown, fallback: string): string {
+  const candidate = typeof value === 'string' && value.trim() ? value.trim() : fallback;
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    throw new ValidationError('MoMo endpoint không hợp lệ');
+  }
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'payment.momo.vn' || parsed.username || parsed.password) {
+    throw new ValidationError('MoMo endpoint phải là payment.momo.vn qua HTTPS');
+  }
+  return parsed.toString();
+}
+
+function safeEqual(left: string, right: string): boolean {
+  const a = Buffer.from(left, 'utf8');
+  const b = Buffer.from(right, 'utf8');
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 
 export interface CreateMomoLinkItem {
   stockItemId: number;
@@ -75,22 +99,11 @@ export class PosMomoService {
       }
     }
 
-    const customPriceMap = new Map<number, number>();
-    for (const item of input.items) {
-      const p = item.price !== undefined ? item.price : item.unitPrice;
-      if (p !== undefined && p !== null && !isNaN(Number(p)) && Number(p) >= 0) {
-        customPriceMap.set(item.stockItemId, Number(p));
-      }
-    }
-
     const itemMap = new Map(stockItems.map((si) => [si.id, si]));
     let subtotalAmount = new Prisma.Decimal(0);
     const rawLines = aggregatedItems.map((item) => {
       const stockItem = itemMap.get(item.stockItemId)!;
-      const customPrice = customPriceMap.get(item.stockItemId);
-      const unitPrice = customPrice !== undefined
-        ? new Prisma.Decimal(customPrice)
-        : new Prisma.Decimal(stockItem.sellingPrice);
+      const unitPrice = new Prisma.Decimal(stockItem.sellingPrice);
       const costPrice = new Prisma.Decimal(stockItem.costPrice);
       const subtotal = unitPrice.mul(item.quantity).toDecimalPlaces(2);
       subtotalAmount = subtotalAmount.plus(subtotal);
@@ -99,9 +112,9 @@ export class PosMomoService {
 
     const discountAmount = new Prisma.Decimal(input.discountAmount || 0).toDecimalPlaces(2);
     const taxAmount = new Prisma.Decimal(input.taxAmount || 0).toDecimalPlaces(2);
-    let totalAmount = subtotalAmount.minus(discountAmount).plus(taxAmount).toDecimalPlaces(2);
-    if (input.totalAmount !== undefined && Number(input.totalAmount) > 0) {
-      totalAmount = new Prisma.Decimal(input.totalAmount).toDecimalPlaces(2);
+    const totalAmount = subtotalAmount.minus(discountAmount).plus(taxAmount).toDecimalPlaces(2);
+    if (input.totalAmount !== undefined && !new Prisma.Decimal(input.totalAmount).eq(totalAmount)) {
+      throw new ValidationError('Tổng tiền MoMo không khớp với giá trị đơn hàng do máy chủ tính');
     }
     const totalNumber = Math.round(Number(totalAmount));
 
@@ -209,7 +222,7 @@ export class PosMomoService {
       const rawSignature = `accessKey=${accessKey}&amount=${totalNumber}&extraData=&ipnUrl=${ipnUrl}&orderId=${momoOrderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&redirectUrl=${redirectUrl}&requestId=${momoOrderId}&requestType=captureWallet`;
       const signature = crypto.createHmac('sha256', secretKey).update(rawSignature).digest('hex');
 
-      const endpoint = momoRaw.endpoint || 'https://payment.momo.vn/v2/gateway/api/create';
+      const endpoint = assertAllowedMomoEndpoint(momoRaw.endpoint, MOMO_CREATE_ENDPOINT);
       const momoRes = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -324,8 +337,8 @@ export class PosMomoService {
         const rawSignature = `accessKey=${accessKey}&orderId=${momoOrderId}&partnerCode=${partnerCode}&requestId=${momoOrderId}`;
         const signature = crypto.createHmac('sha256', secretKey).update(rawSignature).digest('hex');
 
-        const queryEndpoint = momoRaw.queryEndpoint || 'https://payment.momo.vn/v2/gateway/api/query';
-      const queryRes = await fetch(queryEndpoint, {
+        const queryEndpoint = assertAllowedMomoEndpoint(momoRaw.queryEndpoint, MOMO_QUERY_ENDPOINT);
+        const queryRes = await fetch(queryEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -450,6 +463,59 @@ export class PosMomoService {
     };
   }
 
+  async handleIpn(input: Record<string, unknown>) {
+    const orderId = typeof input.orderId === 'string' ? input.orderId.trim() : '';
+    const signature = typeof input.signature === 'string' ? input.signature.trim() : '';
+    if (!orderId || !signature) {
+      throw new ValidationError('MoMo IPN thiếu orderId hoặc signature');
+    }
+
+    const payment = await this.db.payment.findFirst({
+      where: { providerReference: orderId, provider: PaymentProvider.PAYOS },
+      include: { order: true },
+    });
+    if (!payment?.order) {
+      throw new NotFoundError('Không tìm thấy giao dịch MoMo');
+    }
+
+    const config = this.getRawMomoConfig(payment.order.storeId);
+    if (!config?.accessKey || !config.secretKey) {
+      throw new ValidationError('Cấu hình MoMo không hợp lệ');
+    }
+    if (input.partnerCode !== config.partnerCode) {
+      throw new ValidationError('MoMo IPN không thuộc cấu hình cửa hàng');
+    }
+
+    const rawSignature = [
+      `accessKey=${config.accessKey}`,
+      `amount=${String(input.amount ?? '')}`,
+      `extraData=${String(input.extraData ?? '')}`,
+      `message=${String(input.message ?? '')}`,
+      `orderId=${orderId}`,
+      `orderInfo=${String(input.orderInfo ?? '')}`,
+      `orderType=${String(input.orderType ?? '')}`,
+      `partnerCode=${String(input.partnerCode ?? '')}`,
+      `payType=${String(input.payType ?? '')}`,
+      `requestId=${String(input.requestId ?? '')}`,
+      `responseTime=${String(input.responseTime ?? '')}`,
+      `resultCode=${String(input.resultCode ?? '')}`,
+      `transId=${String(input.transId ?? '')}`,
+    ].join('&');
+    const expectedSignature = crypto.createHmac('sha256', config.secretKey).update(rawSignature).digest('hex');
+    if (!safeEqual(expectedSignature, signature)) {
+      throw new ValidationError('MoMo IPN signature không hợp lệ');
+    }
+
+    const receivedAmount = Number(input.amount);
+    const expectedAmount = Math.round(Number(payment.amount));
+    if (Number(input.resultCode) !== 0 || !Number.isFinite(receivedAmount) || receivedAmount !== expectedAmount) {
+      return { accepted: true, settled: false };
+    }
+
+    await this.confirmPaymentSuccess(payment.order.storeId, orderId);
+    return { accepted: true, settled: true };
+  }
+
   /**
    * Đọc cấu hình MoMo thô (bao gồm secretKey) cho các xử lý nội bộ backend
    */
@@ -461,8 +527,8 @@ export class PosMomoService {
     try {
       const configs = JSON.parse(fs.readFileSync(configPath, 'utf8'));
       const cfg = configs[String(storeId)];
-      if (cfg && cfg.partnerCode && cfg.accessKey && cfg.secretKey) {
-        return cfg;
+      if (cfg && cfg.partnerCode && cfg.accessKey && typeof cfg.secretKey === 'string' && cfg.secretKey.startsWith('v1:')) {
+        return { ...cfg, secretKey: SecretEncryptionService.decrypt(cfg.secretKey) };
       }
       return null;
     } catch {
@@ -480,9 +546,8 @@ export class PosMomoService {
         partnerCode: '',
         accessKey: '',
         businessName: '',
-        endpoint: 'https://payment.momo.vn/v2/gateway/api/create',
-        queryEndpoint: 'https://payment.momo.vn/v2/gateway/api/query',
-        posEndpoint: 'https://payment.momo.vn/v2/gateway/api/pos',
+        endpoint: MOMO_CREATE_ENDPOINT,
+        queryEndpoint: MOMO_QUERY_ENDPOINT,
         storeQrId: '',
         merchantAccount: '',
         qrImageUrl: '',
@@ -495,9 +560,8 @@ export class PosMomoService {
       partnerCode: raw.partnerCode,
       accessKey: raw.accessKey,
       businessName: raw.businessName || raw.merchantName || '',
-      endpoint: raw.endpoint || 'https://payment.momo.vn/v2/gateway/api/create',
-      queryEndpoint: raw.queryEndpoint || 'https://payment.momo.vn/v2/gateway/api/query',
-      posEndpoint: raw.posEndpoint || 'https://payment.momo.vn/v2/gateway/api/pos',
+      endpoint: assertAllowedMomoEndpoint(raw.endpoint, MOMO_CREATE_ENDPOINT),
+      queryEndpoint: assertAllowedMomoEndpoint(raw.queryEndpoint, MOMO_QUERY_ENDPOINT),
       storeQrId: raw.storeQrId || '',
       merchantAccount: raw.merchantAccount || '',
       qrImageUrl: raw.qrImageUrl || '',
@@ -545,10 +609,9 @@ export class PosMomoService {
     const updatedConfig = {
       partnerCode,
       accessKey,
-      secretKey,
-      endpoint: input.endpoint || existing?.endpoint || 'https://payment.momo.vn/v2/gateway/api/create',
-      queryEndpoint: input.queryEndpoint || existing?.queryEndpoint || 'https://payment.momo.vn/v2/gateway/api/query',
-      posEndpoint: input.posEndpoint || existing?.posEndpoint || 'https://payment.momo.vn/v2/gateway/api/pos',
+      secretKey: SecretEncryptionService.encrypt(secretKey),
+      endpoint: MOMO_CREATE_ENDPOINT,
+      queryEndpoint: MOMO_QUERY_ENDPOINT,
       publicKey: input.publicKey || existing?.publicKey || '',
       storeQrId: input.storeQrId || existing?.storeQrId || '',
       merchantAccount: input.merchantAccount || existing?.merchantAccount || '',
@@ -569,7 +632,6 @@ export class PosMomoService {
       businessName,
       endpoint: updatedConfig.endpoint,
       queryEndpoint: updatedConfig.queryEndpoint,
-      posEndpoint: updatedConfig.posEndpoint,
       isConfigured: true,
       hasSecretKey: true,
     };

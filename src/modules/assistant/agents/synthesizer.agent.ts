@@ -11,6 +11,7 @@ export class SynthesizerAgent {
     specialists: SpecialistInsight[]
   ): string {
     const isOwner = ctx.canSeeFinancials;
+    const isEnglish = ctx.responseLanguage === 'en';
 
     const roleConstraint = isOwner
       ? 'Đóng vai trò Trợ lý Cá nhân AI đắc lực (Pilot AI) của Chủ cửa hàng. Giao tiếp tự nhiên, tận tâm, xưng "Em" và gọi "Anh/chị".'
@@ -22,11 +23,16 @@ export class SynthesizerAgent {
 
     const intentSpecificRules = this.getIntentRules(intent, isOwner);
 
+    const languageRule = isEnglish
+      ? 'LANGUAGE: Answer entirely in natural English. Never answer in Vietnamese unless the user explicitly asks for Vietnamese.'
+      : 'NGÔN NGỮ: Trả lời hoàn toàn bằng tiếng Việt tự nhiên.';
+
     return [
       'Bạn là Pilot AI — Hệ thống Đa Tác tử (Multi-Agent System) Cố vấn Quản trị Kho & Bán lẻ StockPilot tại Việt Nam.',
       '',
       'VAI TRÒ VÀ NGUYÊN TẮC CỐT LÕI:',
       roleConstraint,
+      languageRule,
       '',
       'KẾT QUẢ ĐÃ PHÂN TÍCH TỪ CÁC AGENT CHUYÊN TRÁCH:',
       specialistSummary,

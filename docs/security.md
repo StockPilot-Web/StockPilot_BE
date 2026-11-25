@@ -122,6 +122,13 @@ Per-store payment credentials are stored in `store_payment_configs` and encrypte
 
 POS cash payment records do not store provider credentials. Payment metadata must not include raw provider secrets, tokens, or customer payment credentials.
 
+MoMo payment hardening:
+
+- MoMo IPN settlement requires a valid HMAC-SHA256 signature and an amount equal to the server-side payment amount. Browser callbacks never settle an order directly.
+- MoMo create/query endpoints are fixed to `https://payment.momo.vn`; client-supplied URLs are ignored and private-network SSRF targets are not accepted.
+- MoMo secrets in the legacy runtime configuration file are encrypted with `PAYMENT_CONFIG_ENCRYPTION_KEY`. Plaintext legacy entries are rejected and must be re-entered after rotating any previously exposed credential.
+- MoMo payment schemas do not accept client-controlled item prices; totals are calculated from the server catalog.
+
 ## AI Data Minimization
 
 Assistant context must contain only authorized data needed to explain deterministic output.

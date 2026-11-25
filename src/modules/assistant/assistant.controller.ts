@@ -204,7 +204,8 @@ export class AssistantController {
       const blob = new Blob([audioBuffer], { type: mimeType });
       formData.append('file', blob, fileName);
       formData.append('model', env.GROQ_WHISPER_MODEL || 'whisper-large-v3');
-      formData.append('language', 'vi');
+      const requestedLanguage = req.body?.language === 'en' ? 'en' : 'vi';
+      formData.append('language', requestedLanguage);
       formData.append('response_format', 'json');
       formData.append('prompt', 'StockPilot, Pilot AI, KiotViet, Sapo, POS, quản lý bán hàng, tồn kho, doanh thu, lợi nhuận, giá vốn, hóa đơn, khách hàng, nhà cung cấp, sản phẩm, chiết khấu.');
 
