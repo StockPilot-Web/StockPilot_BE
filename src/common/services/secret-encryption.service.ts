@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { env, isValidAes256Key } from '../../config/env';
+import { ValidationError } from '../errors/app-error';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH_BYTES = 12;
@@ -20,7 +21,7 @@ export class SecretEncryptionService {
     try {
       const [version, ivBase64, tagBase64, ciphertextBase64] = serialized.split(':');
       if (version !== VERSION || !ivBase64 || !tagBase64 || !ciphertextBase64) {
-        throw new Error('Invalid encrypted secret format');
+        throw new ValidationError('Invalid encrypted secret format');
       }
 
       const key = getEncryptionKey();
@@ -29,14 +30,14 @@ export class SecretEncryptionService {
       const ciphertext = Buffer.from(ciphertextBase64, 'base64');
 
       if (iv.length !== IV_LENGTH_BYTES || tag.length !== 16 || ciphertext.length === 0) {
-        throw new Error('Invalid encrypted secret payload');
+        throw new ValidationError('Invalid encrypted secret payload');
       }
 
       const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
       decipher.setAuthTag(tag);
       return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
     } catch {
-      throw new Error('SECRET_DECRYPTION_FAILED');
+      throw new ValidationError('SECRET_DECRYPTION_FAILED');
     }
   }
 }
@@ -44,7 +45,7 @@ export class SecretEncryptionService {
 function getEncryptionKey(): Buffer {
   const key = env.PAYMENT_CONFIG_ENCRYPTION_KEY;
   if (!isValidAes256Key(key)) {
-    throw new Error('PAYMENT_CONFIG_ENCRYPTION_KEY_INVALID');
+    throw new ValidationError('PAYMENT_CONFIG_ENCRYPTION_KEY_INVALID');
   }
 
   return /^[a-f0-9]{64}$/i.test(key) ? Buffer.from(key, 'hex') : Buffer.from(key, 'base64');

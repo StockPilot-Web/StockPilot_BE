@@ -26,6 +26,16 @@ export interface AiAnswerMeta {
 
 const RULES_MODEL = 'StockPilot-Rules-v2';
 
+export type AssistantLanguage = 'vi' | 'en';
+
+export function detectAssistantLanguage(question: string): AssistantLanguage {
+  const q = (question || '').trim().toLowerCase();
+  if (/[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i.test(q)) return 'vi';
+  const vietnameseWords = ['hàng', 'kho', 'tồn', 'bán', 'doanh', 'thu', 'lợi', 'nhuận', 'sản', 'phẩm', 'cảnh', 'báo'];
+  if (vietnameseWords.some((word) => q.includes(word))) return 'vi';
+  return 'en';
+}
+
 const BASE_INSTRUCTIONS = [
   'Bạn là Pilot AI — Trợ lý Cá nhân AI & Cố vấn Quản trị Cửa hàng của StockPilot tại Việt Nam.',
   '',
@@ -83,8 +93,11 @@ const BASE_INSTRUCTIONS = [
 const STAFF_INSTRUCTIONS =
   '- Người hỏi là NHÂN VIÊN KHO: tuyệt đối không bàn về giá vốn, lợi nhuận, biên lợi nhuận, doanh thu hay giá bán đề xuất. Chỉ nói về số lượng, tồn kho và việc vận hành kho.';
 
-function instructionsFor(role: Role | undefined, task: string): string {
-  return [BASE_INSTRUCTIONS, canViewFinancials(role) ? '' : STAFF_INSTRUCTIONS, '', `Nhiệm vụ: ${task}`]
+function instructionsFor(role: Role | undefined, task: string, language: AssistantLanguage = 'vi'): string {
+  const languageRule = language === 'en'
+    ? 'LANGUAGE: Answer entirely in natural English. Do not translate the user back into Vietnamese. Keep product names, SKUs and currency facts unchanged.'
+    : 'NGÔN NGỮ: Trả lời hoàn toàn bằng tiếng Việt tự nhiên.';
+  return [BASE_INSTRUCTIONS, languageRule, canViewFinancials(role) ? '' : STAFF_INSTRUCTIONS, '', `Nhiệm vụ: ${task}`]
     .filter((line, i, all) => line !== '' || all[i - 1] !== '')
     .join('\n');
 }
@@ -112,8 +125,9 @@ export class AiDecisionService {
   async explainSku(storeId: number, stockItemId: number, question: string | undefined, role: Role | undefined, userId?: number) {
     const base = await this.rules.explainSku(storeId, stockItemId, question, role);
     const ask = question?.trim() || 'Giải thích tình trạng tồn kho, rủi ro và việc nên làm cho sản phẩm này.';
+    const language = detectAssistantLanguage(ask);
     const ai = await this.tryComplete(storeId, userId, 'SKU_EXPLAIN', ask, {
-      instructions: instructionsFor(role, 'Giải thích chuyên sâu tình trạng sản phẩm: tồn kho khả dụng, tốc độ bán, rủi ro, và 1–3 hành động cụ thể nên làm ngay. Trực diện, súc tích.'),
+      instructions: instructionsFor(role, 'Giải thích chuyên sâu tình trạng sản phẩm: tồn kho khả dụng, tốc độ bán, rủi ro, và 1–3 hành động cụ thể nên làm ngay. Trực diện, súc tích.', language),
       input: dataBlock(ask, base.factualContext),
       maxOutputTokens: 1000,
     }, base.explanation);
@@ -759,6 +773,7 @@ export class AiDecisionService {
     }
     const normalizedQ = normalizeVietnameseVoiceQuery(question);
     const ask = normalizedQ.trim() || 'Phân tích tổng quan';
+    const responseLanguage = detectAssistantLanguage(question);
     const canSeeFinancials = canViewFinancials(role);
 
     // 1. Kiểm tra Semantic Cache (Bộ nhớ AI nội bộ) trước khi gọi Gemini API
@@ -805,6 +820,7 @@ export class AiDecisionService {
       userId,
       stockItemId,
       canSeeFinancials,
+      responseLanguage,
       storeContext,
       ruleBasedAnalysis: {
         summaryAnswer: base.answer,
@@ -813,7 +829,9 @@ export class AiDecisionService {
     });
 
     const ai = await this.tryComplete(storeId, userId, 'CHAT', ask, {
-      instructions: agentPlan.instructions,
+      instructions: `${agentPlan.instructions}\n\n${responseLanguage === 'en'
+        ? 'FINAL LANGUAGE REQUIREMENT: Answer entirely in English, even if the source data or specialist notes are Vietnamese.'
+        : 'FINAL LANGUAGE REQUIREMENT: Answer entirely in Vietnamese.'}`,
       input: [
         `Thời gian hiện tại: ${new Date().toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`,
         `Câu hỏi / Yêu cầu từ người dùng: ${ask}`,

@@ -135,6 +135,8 @@ Supported mutation endpoints accept `Idempotency-Key`.
 | GET | `/assistant/overview` | Bearer | `SHOP_OWNER`, `WAREHOUSE_STAFF` | Yes | `{ timeframeDays? }` | store summary explanation | No |
 | POST | `/assistant/chat` | Bearer | `SHOP_OWNER`, `WAREHOUSE_STAFF` | Yes | `{ question? (max 1000), stockItemId? }` | template answer; staff never receive cost, margin, revenue, capital, or pricing recommendations | No |
 
+The voice transcription endpoint accepts an optional `language` form field (`vi` or `en`). The assistant preserves the detected/requested language for model instructions and browser speech output; authorization and financial-field masking remain server-side.
+
 ## Decision Engine Read Model
 
 `GET /decision-engine/sku/:stockItemId` and `GET /decision-engine/overview` are read-only. They return the latest `DecisionSnapshot`; when a SKU has no usable snapshot the analysis is computed in memory without writing (`source: "LIVE"`).

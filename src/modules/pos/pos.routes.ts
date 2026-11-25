@@ -4,7 +4,7 @@ import { requireRole, requireStoreScope } from '../../common/middleware/rbac';
 import { validate } from '../../common/middleware/validate';
 import { idempotency } from '../../common/middleware/idempotency';
 import { PosController } from './pos.controller';
-import { createPosSaleSchema } from './pos.schema';
+import { createMomoPaymentSchema, createPayosLinkSchema, createPosSaleSchema, momoConfigSchema, momoOrderIdParamSchema } from './pos.schema';
 
 export const posRouter = Router();
 const controller = new PosController();
@@ -35,6 +35,7 @@ posRouter.post(
 posRouter.post(
   '/payos/create-link',
   requireRole('SHOP_OWNER', 'WAREHOUSE_STAFF'),
+  validate({ body: createPayosLinkSchema }),
   (req, res, next) => controller.createPayosLink(req, res, next)
 );
 
@@ -47,18 +48,21 @@ posRouter.get(
 posRouter.post(
   '/momo/create-payment',
   requireRole('SHOP_OWNER', 'WAREHOUSE_STAFF'),
+  validate({ body: createMomoPaymentSchema }),
   (req, res, next) => controller.createMomoPayment(req, res, next)
 );
 
 posRouter.get(
   '/momo/status/:momoOrderId',
   requireRole('SHOP_OWNER', 'WAREHOUSE_STAFF'),
+  validate({ params: momoOrderIdParamSchema }),
   (req, res, next) => controller.checkMomoStatus(req, res, next)
 );
 
 posRouter.post(
   '/momo/confirm-success/:momoOrderId',
   requireRole('SHOP_OWNER', 'WAREHOUSE_STAFF'),
+  validate({ params: momoOrderIdParamSchema }),
   (req, res, next) => controller.confirmMomoSuccess(req, res, next)
 );
 
@@ -71,6 +75,7 @@ posRouter.get(
 posRouter.post(
   '/momo/config',
   requireRole('SHOP_OWNER'),
+  validate({ body: momoConfigSchema }),
   (req, res, next) => controller.saveMomoConfig(req, res, next)
 );
 

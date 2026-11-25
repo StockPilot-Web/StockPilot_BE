@@ -15,6 +15,7 @@ export interface AgentContext {
   userId?: number;
   stockItemId?: number;
   canSeeFinancials: boolean;
+  responseLanguage?: 'vi' | 'en';
   storeContext: any;
   ruleBasedAnalysis: {
     summaryAnswer: string;
