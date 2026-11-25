@@ -6,6 +6,7 @@ import { DailySalesSummaryService } from '../../modules/daily-sales-summary/dail
 import { DecisionRecomputeQueue } from '../../modules/decision-engine/recompute-queue';
 import { toBusinessDateKey } from '../utils/business-date';
 import { logger } from '../logger';
+import { PushNotificationService } from './push-notification.service';
 
 /**
  * Post-commit trigger facade for the Decision Engine.
@@ -65,6 +66,48 @@ export class BusinessSyncService {
    */
   async syncAfterSale(storeId: number, stockItemIds: number[]): Promise<void> {
     await this.queue.enqueue(storeId, stockItemIds, { summaryDateKeys: [toBusinessDateKey(new Date())] });
+    this.checkAndPushStockAlerts(storeId, stockItemIds).catch((err) => {
+      logger.warn('syncAfterSale_push_alert_failed', { err });
+    });
+  }
+
+  /**
+   * Evaluates if any sold items have dropped below minStockLevel and dispatches push notifications.
+   */
+  async checkAndPushStockAlerts(storeId: number, stockItemIds: number[]): Promise<void> {
+    if (!stockItemIds.length) return;
+    try {
+      const stockItems = await this.prisma.stockItem.findMany({
+        where: {
+          storeId,
+          id: { in: stockItemIds },
+          isActive: true,
+        },
+        include: {
+          balances: true,
+        },
+      });
+
+      const pushService = PushNotificationService.getInstance(this.prisma);
+
+      for (const item of stockItems) {
+        const totalQty = item.balances.reduce((acc, b) => acc + (b.quantity - b.reservedQuantity), 0);
+        if (totalQty <= item.minStockLevel) {
+          const suggestedReorderQty = Math.max(0, item.maxStockLevel - totalQty);
+          await pushService.notifyStockAlert(storeId, {
+            productName: item.name,
+            sku: item.sku,
+            currentStock: totalQty,
+            minStockLevel: item.minStockLevel,
+            suggestedReorderQty,
+          }).catch((err) => {
+            logger.warn('push_stock_alert_item_error', { itemId: item.id, err });
+          });
+        }
+      }
+    } catch (err) {
+      logger.warn('checkAndPushStockAlerts_error', { storeId, err });
+    }
   }
 
   /**

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma as defaultPrisma } from '../../config/db';
 import { logger } from '../logger';
 import { ValidationError } from '../errors/app-error';
+import { emailDomainListSchema } from '../utils/email-domain';
 
 /**
  * Operational thresholds an admin can tune at runtime (stored in `system_settings`, no migration).
@@ -37,6 +38,22 @@ export const OPS_SETTING_DEFINITIONS = {
     schema: z.number().int().min(5).max(1440),
     defaultValue: 30,
     description: 'Giao dịch PayOS ở trạng thái chờ quá số phút này được coi là treo',
+  },
+  // Sign-up e-mail policy (see services/signup-email-policy.service.ts). Edited in Security → IP & device blocks.
+  'ops.signup.blockedEmailDomains': {
+    schema: emailDomainListSchema(500),
+    defaultValue: [] as string[],
+    description: 'Tên miền email không được dùng để đăng ký (thêm vào danh sách chặn sẵn có; chặn cả tên miền con)',
+  },
+  'ops.signup.emailAllowlist': {
+    schema: z
+      .object({ enabled: z.boolean(), domains: emailDomainListSchema(200) })
+      .strict()
+      .refine((v) => !v.enabled || v.domains.length > 0, {
+        message: 'Cần ít nhất 1 tên miền được phép trước khi bật chế độ chỉ cho phép (nếu không sẽ khóa toàn bộ đăng ký)',
+      }),
+    defaultValue: { enabled: false, domains: [] as string[] },
+    description: 'Khi bật, chỉ nhận đăng ký bằng email thuộc các tên miền này (và không nằm trong danh sách chặn)',
   },
 } as const;
 

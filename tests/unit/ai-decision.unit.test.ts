@@ -109,6 +109,18 @@ describe('AiDecisionService', () => {
       expect(llm.complete.mock.calls[0][0].input).toContain('RULES ANSWER');
     });
 
+    it('forces English instructions for an English question and does not reuse the Vietnamese cache', async () => {
+      const { service, llm } = makeService();
+      llm.complete.mockResolvedValue(llmOk('AI ENGLISH ANSWER'));
+
+      const result = await service.chat(1, 'Which products are low in stock?', undefined, 'SHOP_OWNER', 7);
+
+      expect(result).toMatchObject({ answer: 'AI ENGLISH ANSWER', source: 'AI' });
+      const request = llm.complete.mock.calls[0][0];
+      expect(request.instructions).toContain('FINAL LANGUAGE REQUIREMENT: Answer entirely in English');
+      expect(request.instructions).not.toContain('FINAL LANGUAGE REQUIREMENT: Answer entirely in Vietnamese');
+    });
+
     it('returns the financial restriction message without calling the model', async () => {
       const rules = { answerQuestion: jest.fn().mockResolvedValue({ answer: FINANCIAL_DATA_RESTRICTED_MESSAGE, actionLinks: [] }) };
       const { service, llm } = makeService({ rules });

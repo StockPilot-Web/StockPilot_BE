@@ -1,4 +1,5 @@
 import { logger } from '../logger';
+import { ValidationError } from '../errors/app-error';
 
 export interface SendOtpSmsParams {
   phone: string;
@@ -20,11 +21,11 @@ export function normalizePhoneNumber(phone: string): string {
 
 /**
  * Gửi mã OTP xác thực qua tin nhắn SMS / SMS Gateway
- * Hỗ trợ chế độ giả lập (Simulation) in ra terminal và tích hợp SMS Gateway (eSMS, SpeedSMS, Twilio)
+ * Hỗ trợ chế độ giả lập (Simulation) và tích hợp SMS Gateway (eSMS, SpeedSMS, Twilio).
+ * Chế độ giả lập không được coi là gửi thành công và không ghi OTP vào log.
  */
 export async function sendPasswordResetOtpSms({
   phone,
-  name,
   otp,
   expiresMinutes = 15,
 }: SendOtpSmsParams): Promise<{ sent: boolean; simulated?: boolean }> {
@@ -33,17 +34,10 @@ export async function sendPasswordResetOtpSms({
   const smsApiKey = process.env.SMS_API_KEY || '';
   const smsSecret = process.env.SMS_API_SECRET || process.env.SMS_SECRET_KEY || '';
 
-  // Chế độ Giả lập / Terminal log nếu chưa cấu hình cổng SMS
+  // Không có gateway thì chỉ ghi nhận trạng thái mô phỏng, tuyệt đối không log OTP.
   if (smsProvider === 'simulation' || !smsApiKey) {
-    logger.info(`[SMS Service - Chế độ Giả lập] Không có SMS_API_KEY, hiển thị mã OTP SMS ra console:`);
-    console.log('\n======================================================');
-    console.log(`📱 [STOCKPILOT SMS OTP SERVICE]`);
-    console.log(`   Khách hàng: ${name || 'Chủ cửa hàng'}`);
-    console.log(`   Đến SĐT:    ${normalizedPhone}`);
-    console.log(`   Mã OTP:     >>> ${otp} <<<`);
-    console.log(`   Hết hạn:    ${expiresMinutes} phút`);
-    console.log('======================================================\n');
-    return { sent: true, simulated: true };
+    logger.warn('otp_sms_simulated', { reason: 'sms_gateway_not_configured' });
+    return { sent: false, simulated: true };
   }
 
   // Tích hợp SpeedSMS Gateway nếu có cấu hình
@@ -68,7 +62,7 @@ export async function sendPasswordResetOtpSms({
         logger.info(`[SMS Service] Đã gửi OTP SMS thành công tới ${normalizedPhone}`);
         return { sent: true };
       }
-      throw new Error(resData.message || 'SpeedSMS trả về lỗi');
+      throw new ValidationError('SpeedSMS từ chối gửi OTP');
     } catch (err: any) {
       logger.error(`[SMS Service] Gửi SMS qua SpeedSMS thất bại: ${err?.message || err}`);
     }
@@ -95,18 +89,12 @@ export async function sendPasswordResetOtpSms({
         logger.info(`[SMS Service] Đã gửi OTP qua eSMS thành công tới ${normalizedPhone}`);
         return { sent: true };
       }
-      throw new Error(resData.ErrorMessage || 'eSMS trả về lỗi');
+      throw new ValidationError('eSMS từ chối gửi OTP');
     } catch (err: any) {
       logger.error(`[SMS Service] Gửi SMS qua eSMS thất bại: ${err?.message || err}`);
     }
   }
 
-  // Dự phòng hiển thị ra Terminal nếu gọi cổng thật lỗi
-  console.log('\n======================================================');
-  console.log(`⚠️ Gửi SMS qua cổng thất bại, mã OTP dự phòng:`);
-  console.log(`   Đến SĐT: ${normalizedPhone}`);
-  console.log(`   Mã OTP:  >>> ${otp} <<<`);
-  console.log('======================================================\n');
-
-  return { sent: true, simulated: true };
+  logger.warn('otp_sms_delivery_failed', { provider: smsProvider });
+  return { sent: false, simulated: true };
 }

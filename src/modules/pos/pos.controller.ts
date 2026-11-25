@@ -107,7 +107,9 @@ export class PosController {
   async confirmMomoSuccess(req: Request, res: Response, next: NextFunction) {
     try {
       const momoOrderId = req.params.momoOrderId;
-      const result = await momoService.confirmPaymentSuccess(req.user!.storeId!, momoOrderId);
+      // Never trust a browser signal as proof of payment. The service verifies MoMo status
+      // server-to-server before settling the order and deducting inventory.
+      const result = await momoService.checkPaymentStatus(req.user!.storeId!, momoOrderId);
 
       return res.status(200).json({
         success: true,
@@ -121,14 +123,7 @@ export class PosController {
 
   async handleMomoIpn(req: Request, res: Response, next: NextFunction) {
     try {
-      const { orderId } = req.body || {};
-      if (orderId) {
-        // Find store from orderId
-        const order = await (service as any).db?.order?.findFirst({ where: { orderNumber: { contains: orderId } } });
-        if (order) {
-          await momoService.confirmPaymentSuccess(order.storeId, orderId);
-        }
-      }
+      await momoService.handleIpn(req.body || {});
       return res.status(204).send();
     } catch (error) {
       next(error);

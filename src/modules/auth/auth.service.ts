@@ -18,11 +18,13 @@ import { AuditLogService } from '../../common/services/audit-log.service';
 import { LoginGuardService } from '../../common/services/login-guard.service';
 import { TwoFactorService } from '../../common/services/two-factor.service';
 import { isValidTenantCode, normalizeTenantCode } from '../../common/utils/tenant-slug';
+import { SignupEmailPolicyService } from '../../common/services/signup-email-policy.service';
 import { sendPasswordResetOtpEmail, sendRegisterOtpEmail } from '../../common/services/email.service';
 import { sendPasswordResetOtpSms } from '../../common/services/sms.service';
+import { TurnstileService } from '../../common/services/turnstile.service';
 
-// Store in-memory OTPs for registration verification (email -> { otp, expiresAt })
-const registerOtpStore = new Map<string, { otp: string; expiresAt: Date }>();
+// Store in-memory OTPs for registration verification (email -> { otp, expiresAt, sentAt, attempts })
+const registerOtpStore = new Map<string, { otp: string; expiresAt: Date; sentAt: number; attempts: number }>();
 
 export class AuthService {
   private prisma: PrismaClient;
@@ -31,9 +33,22 @@ export class AuthService {
     this.prisma = customPrisma || defaultPrisma;
   }
 
-  async sendRegisterOtp(input: z.infer<typeof sendRegisterOtpSchema>) {
+  async sendRegisterOtp(
+    input: z.infer<typeof sendRegisterOtpSchema>,
+    meta?: { clientIp?: string }
+  ) {
     await this.assertSignupEnabled();
+
+    // 0. Xác thực bảo vệ CAPTCHA (chống spam, bot account, DDoS SMTP)
+    if (env.TURNSTILE_SECRET_KEY && process.env.NODE_ENV !== 'test') {
+      const captchaRes = await TurnstileService.verify(input.turnstileToken, meta?.clientIp);
+      if (!captchaRes.success) {
+        throw new ValidationError(captchaRes.error || 'Xác thực bảo mật CAPTCHA không thành công');
+      }
+    }
+
     const email = input.email.toLowerCase().trim();
+    await SignupEmailPolicyService.assertAllowed(email, this.prisma);
 
     // 1. Kiểm tra email đã tồn tại hay chưa
     const existingUser = await this.prisma.user.findUnique({
@@ -57,12 +72,24 @@ export class AuthService {
       }
     }
 
-    // 3. Sinh OTP 6 chữ số ngẫu nhiên
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // 3. Kiểm tra cooldown 60 giây nếu vừa gửi OTP cho email này (chống spam flooding)
+    const existingOtp = registerOtpStore.get(email);
+    if (
+      existingOtp &&
+      existingOtp.expiresAt > new Date() &&
+      Date.now() - existingOtp.sentAt < 60_000 &&
+      process.env.NODE_ENV !== 'test'
+    ) {
+      const waitSeconds = Math.ceil((60_000 - (Date.now() - existingOtp.sentAt)) / 1000);
+      throw new ValidationError(`Vui lòng đợi ${waitSeconds} giây trước khi yêu cầu gửi lại mã OTP.`);
+    }
+
+    // Sinh OTP 6 chữ số ngẫu nhiên
+    const otp = crypto.randomInt(100000, 1_000_000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 phút
 
-    // Lưu vào bộ nhớ
-    registerOtpStore.set(email, { otp, expiresAt });
+    // Lưu vào bộ nhớ kèm thời gian gửi và khởi tạo số lần thử
+    registerOtpStore.set(email, { otp, expiresAt, sentAt: Date.now(), attempts: 0 });
 
     // 4. Gửi email chứa mã OTP
     const emailResult = await sendRegisterOtpEmail({
@@ -85,9 +112,22 @@ export class AuthService {
     return publicResult;
   }
 
-  async registerOwner(input: z.infer<typeof registerSchema>, meta?: { userAgent?: string; ipAddress?: string }) {
+  async registerOwner(
+    input: z.infer<typeof registerSchema>,
+    meta?: { userAgent?: string; ipAddress?: string; deviceId?: string | null; fingerprint?: string | null }
+  ) {
     await this.assertSignupEnabled();
+
+    // 0. Kiểm tra token CAPTCHA nếu client gửi kèm trong payload đăng ký
+    if (env.TURNSTILE_SECRET_KEY && process.env.NODE_ENV !== 'test' && input.turnstileToken) {
+      const captchaRes = await TurnstileService.verify(input.turnstileToken, meta?.ipAddress);
+      if (!captchaRes.success) {
+        throw new ValidationError(captchaRes.error || 'Xác thực bảo mật CAPTCHA không thành công');
+      }
+    }
+
     const email = input.email.toLowerCase().trim();
+    await SignupEmailPolicyService.assertAllowed(email, this.prisma);
 
     // 1. Xác thực mã OTP đăng ký (bắt buộc trong production)
     if (input.otp) {
@@ -98,7 +138,16 @@ export class AuthService {
       }
 
       if (stored.otp !== input.otp.trim()) {
-        throw new ValidationError('Mã OTP xác thực không chính xác. Vui lòng kiểm tra lại hộp thư email');
+        stored.attempts = (stored.attempts || 0) + 1;
+        if (stored.attempts >= 5) {
+          registerOtpStore.delete(email);
+          throw new ValidationError(
+            'Bạn đã nhập sai mã OTP quá 5 lần. Mã xác thực đã bị hủy để đảm bảo an toàn. Vui lòng bấm gửi lại mã OTP mới.'
+          );
+        }
+        throw new ValidationError(
+          `Mã OTP xác thực không chính xác (còn ${5 - stored.attempts} lần thử). Vui lòng kiểm tra lại hộp thư email`
+        );
       }
       registerOtpStore.delete(email);
     } else if (process.env.NODE_ENV === 'production') {
@@ -195,6 +244,9 @@ export class AuthService {
           storeId: store.id,
           storeCode: store.code,
           ownerUserId: user.id,
+          // Device signals, so an admin can block the machine behind junk sign-ups.
+          deviceId: meta?.deviceId ?? null,
+          fingerprint: meta?.fingerprint ?? null,
         },
         ipAddress: meta?.ipAddress,
         userAgent: meta?.userAgent,
@@ -542,7 +594,7 @@ export class AuthService {
     }
 
     // Sinh mã OTP 6 chữ số ngẫu nhiên và token kèm chữ ký HMAC
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = crypto.randomInt(100000, 1_000_000).toString();
     const sig = crypto
       .createHmac('sha256', env.JWT_SECRET || 'stockpilot_secret')
       .update(`${user.id}:${otp}:${expiresAt.getTime()}`)

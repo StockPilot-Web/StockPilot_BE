@@ -397,6 +397,12 @@ export class AiMemoryService {
       let sanitizedCount = 0;
       for (const item of parsed) {
         if (item && item.id && item.question && item.answer) {
+          // Learned answers are not tenant-scoped. Never load them into a
+          // process-wide cache or expose them as a fallback to another store.
+          if (item.id.startsWith('learned-')) {
+            continue;
+          }
+
           if (!item.normalizedQuestion) {
             item.normalizedQuestion = normalizeVietnamese(item.question);
           }
@@ -404,13 +410,8 @@ export class AiMemoryService {
           // Smart Guardrail Sanitization: Purge dynamically learned queries that slipped in
           const intent = classifyQueryIntent(item.question);
           const containsLiveMoney = /(?:\d{1,3}(?:\.\d{3})+|\d+)\s*(?:đ|vnd|triệu|nghìn)/i.test(item.answer);
-          const isStaleLearned = item.id.startsWith('learned-') && (intent === 'DYNAMIC_REALTIME' || containsLiveMoney);
-
-          if (isStaleLearned) {
+          if (intent === 'DYNAMIC_REALTIME' || containsLiveMoney) {
             sanitizedCount++;
-            if (aiVaultService.isReady()) {
-              aiVaultService.delete(item.id);
-            }
             continue;
           }
 
@@ -432,8 +433,7 @@ export class AiMemoryService {
       }
 
       if (sanitizedCount > 0) {
-        logger.info('ai_memory_sanitized_stale_learned_items', { count: sanitizedCount });
-        this.saveKnowledge().catch(() => {});
+        logger.info('ai_memory_skipped_unsafe_global_items', { count: sanitizedCount });
       }
 
       logger.info('ai_memory_hot_cache_loaded', { count: this.items.size, path: this.filePath });
@@ -563,7 +563,7 @@ export class AiMemoryService {
         threshold
       );
 
-      if (vaultMatch) {
+      if (vaultMatch && !vaultMatch.item.id.startsWith('learned-')) {
         logger.debug('ai_memory_vault_hit', {
           score: vaultMatch.score,
           source: vaultMatch.source,
@@ -614,6 +614,12 @@ export class AiMemoryService {
     category: 'static_faq' | 'general' = 'general'
   ): Promise<KnowledgeItem | null> {
     if (!question || !answer || typeof question !== 'string' || typeof answer !== 'string') {
+      return null;
+    }
+
+    // Only curated, explicitly global FAQ entries may enter this process-wide
+    // memory. Store-specific assistant answers must never be shared globally.
+    if (category !== 'static_faq') {
       return null;
     }
 

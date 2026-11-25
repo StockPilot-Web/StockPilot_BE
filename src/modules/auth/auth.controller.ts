@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { readDeviceIdentity } from '../../common/utils/device-identity';
 import { AuthService } from './auth.service';
 
 export class AuthController {
@@ -10,7 +11,8 @@ export class AuthController {
 
   async sendRegisterOtp(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await this.authService.sendRegisterOtp(req.body);
+      const clientIp = (req.ip || req.socket.remoteAddress) as string | undefined;
+      const result = await this.authService.sendRegisterOtp(req.body, { clientIp });
       return res.status(200).json({
         success: true,
         message: 'Mã xác thực OTP đã được gửi đến email đăng ký của bạn.',
@@ -26,6 +28,7 @@ export class AuthController {
       const meta = {
         userAgent: req.headers['user-agent'],
         ipAddress: req.ip || req.socket.remoteAddress,
+        ...readDeviceIdentity(req),
       };
       const result = await this.authService.registerOwner(req.body, meta);
       return res.status(201).json({

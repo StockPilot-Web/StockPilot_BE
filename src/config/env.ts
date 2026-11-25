@@ -110,6 +110,9 @@ const envSchema = z
     GENERAL_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
     AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60 * 1000),
     AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+    // Account creation (/auth/send-register-otp, /auth/register): requests per IP per window, each endpoint.
+    SIGNUP_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60 * 60 * 1000),
+    SIGNUP_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(6),
     REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
     KEEP_ALIVE_TIMEOUT_MS: z.coerce.number().int().positive().default(65_000),
     HEADERS_TIMEOUT_MS: z.coerce.number().int().positive().default(66_000),
@@ -140,6 +143,7 @@ const envSchema = z
     AI_MAX_STORAGE_GB: z.coerce.number().positive().default(100),
     AI_SQLITE_DB_PATH: z.string().default('D:/AI_Memory/db/ai-brain.sqlite'),
     GEMINI_EMBEDDING_MODEL: z.string().default('models/gemini-embedding-001'),
+    TURNSTILE_SECRET_KEY: z.preprocess((value) => (value === '' ? undefined : value), z.string().optional()),
   })
   .refine(
     (data) => {
@@ -190,12 +194,24 @@ if (!parsedEnv.success) {
   process.exit(1);
 }
 
+if (parsedEnv.data.NODE_ENV !== 'test') {
+  const requiredRuntimeSecrets = [
+    ['DATABASE_URL', parsedEnv.data.DATABASE_URL],
+    ['JWT_SECRET', parsedEnv.data.JWT_SECRET],
+    ['JWT_REFRESH_SECRET', parsedEnv.data.JWT_REFRESH_SECRET],
+    ['PAYMENT_CONFIG_ENCRYPTION_KEY', parsedEnv.data.PAYMENT_CONFIG_ENCRYPTION_KEY],
+  ].filter(([, value]) => !value);
+
+  if (requiredRuntimeSecrets.length > 0) {
+    process.stderr.write(`Missing required runtime environment variables: ${requiredRuntimeSecrets.map(([name]) => name).join(', ')}\n`);
+    process.exit(1);
+  }
+}
+
 export const env = {
   ...parsedEnv.data,
-  DATABASE_URL: parsedEnv.data.DATABASE_URL || 'mysql://root:password@127.0.0.1:3306/stockpilot',
-  JWT_SECRET: parsedEnv.data.JWT_SECRET || 'stockpilot-secret-jwt-key-2026',
-  JWT_REFRESH_SECRET: parsedEnv.data.JWT_REFRESH_SECRET || 'stockpilot-secret-refresh-key-2026',
-  PAYMENT_CONFIG_ENCRYPTION_KEY:
-    parsedEnv.data.PAYMENT_CONFIG_ENCRYPTION_KEY ||
-    '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  DATABASE_URL: parsedEnv.data.DATABASE_URL || '',
+  JWT_SECRET: parsedEnv.data.JWT_SECRET || '',
+  JWT_REFRESH_SECRET: parsedEnv.data.JWT_REFRESH_SECRET || '',
+  PAYMENT_CONFIG_ENCRYPTION_KEY: parsedEnv.data.PAYMENT_CONFIG_ENCRYPTION_KEY || '',
 };

@@ -135,6 +135,8 @@ Supported mutation endpoints accept `Idempotency-Key`.
 | GET | `/assistant/overview` | Bearer | `SHOP_OWNER`, `WAREHOUSE_STAFF` | Yes | `{ timeframeDays? }` | store summary explanation | No |
 | POST | `/assistant/chat` | Bearer | `SHOP_OWNER`, `WAREHOUSE_STAFF` | Yes | `{ question? (max 1000), stockItemId? }` | template answer; staff never receive cost, margin, revenue, capital, or pricing recommendations | No |
 
+The voice transcription endpoint accepts an optional `language` form field (`vi` or `en`). The assistant preserves the detected/requested language for model instructions and browser speech output; authorization and financial-field masking remain server-side.
+
 ## Decision Engine Read Model
 
 `GET /decision-engine/sku/:stockItemId` and `GET /decision-engine/overview` are read-only. They return the latest `DecisionSnapshot`; when a SKU has no usable snapshot the analysis is computed in memory without writing (`source: "LIVE"`).
@@ -226,3 +228,15 @@ The minimal Notification Center is a per-user inbox over existing `Notification`
 - `POST /notifications/read-all` marks unread rows for the authenticated user as read.
 - `userId = null` notification rows are not exposed by the minimal inbox because broadcast read-state is deferred.
 - Realtime delivery, push/SSE/WebSocket, broadcast recipient expansion, and read-receipt tables are not part of this API.
+
+## Admin — chống phá hoại (2026-11-19)
+
+Tất cả dưới `/api/v1/admin/ops`, yêu cầu role `ADMIN`, ghi `audit_logs`. Lưu trong `system_settings` (không migration).
+
+- `POST /stores/purge` — `{ storeIds[1..100], dryRun?, blockCreators?, reason?, actorPassword? }`. `dryRun: true` = xem trước chỉ đọc (không cần mật khẩu). Xóa thật cần `reason` + `actorPassword`; chỉ xóa cửa hàng chưa có dữ liệu thật, kiểm tra lại trong transaction có khóa dòng lúc thực thi. Trạng thái từng shop: `DELETABLE | DELETED | SKIPPED | NOT_FOUND | FAILED`, kèm `creator` (IP/thiết bị từ nhật ký `STORE_REGISTERED`, hoặc `null`). `blockCreators: true` chặn vĩnh viễn IP/thiết bị của các shop **đã xóa thành công** qua danh sách chặn IP/thiết bị; kết quả riêng trong `blocks` (`BLOCKED | ALREADY_BLOCKED | FAILED`).
+- `GET|POST /security/ip-blocks`, `DELETE /security/ip-blocks/:id` — chặn IP/CIDR (403 `IP_BLOCKED`).
+- `GET|POST /security/device-blocks`, `DELETE /security/device-blocks/:id` — chặn `X-Device-Id` / `X-Device-Fp` (403 `DEVICE_BLOCKED`).
+- `GET /security/ip-activity` — IP truy cập nhiều nhất, audit theo IP, đăng ký gần đây kèm IP/thiết bị.
+- `GET /security/signup-email-policy` — danh sách tên miền email: có sẵn, từ env `SIGNUP_BLOCKED_EMAIL_DOMAINS`, do admin thêm, và chế độ chỉ cho phép.
+- `PUT /settings/ops.signup.blockedEmailDomains` `{ value: string[] }` và `PUT /settings/ops.signup.emailAllowlist` `{ value: { enabled, domains[] } }` — chuẩn hóa, loại trùng, khớp tên miền và tên miền con; danh sách chặn luôn ưu tiên; không cho bật danh sách cho phép rỗng. Có hiệu lực ngay (đọc DB mỗi lượt đăng ký).
+- Tắt đăng ký: setting có sẵn `signup.enabled` (`PUT /api/v1/admin/system/settings/signup.enabled`) — `/auth/send-register-otp` và `/auth/register` trả 403.

@@ -10,10 +10,16 @@ import {
   auditIdParamSchema,
   broadcastSchema,
   clearLockSchema,
+  deviceBlockCreateSchema,
   growthQuerySchema,
+  ipActivityQuerySchema,
+  ipBlockCreateSchema,
+  ipBlockIdParamSchema,
+  ipBlockRemoveSchema,
   loginFailureQuerySchema,
   opsSettingKeyParamSchema,
   paymentHealthQuerySchema,
+  purgeStoresSchema,
   restoreSettingSchema,
   retentionQuerySchema,
   settingHistoryQuerySchema,
@@ -68,6 +74,27 @@ adminOpsRouter.post(
   controller.clearLoginLock
 );
 
+// Security incident response — IP blocklist and per-IP activity
+adminOpsRouter.get('/security/ip-blocks', controller.getIpBlocks);
+adminOpsRouter.post('/security/ip-blocks', writeLimiter, validate({ body: ipBlockCreateSchema }), controller.blockIp);
+adminOpsRouter.delete(
+  '/security/ip-blocks/:id',
+  writeLimiter,
+  validate({ params: ipBlockIdParamSchema, body: ipBlockRemoveSchema }),
+  controller.unblockIp
+);
+adminOpsRouter.get('/security/device-blocks', controller.getDeviceBlocks);
+adminOpsRouter.post('/security/device-blocks', writeLimiter, validate({ body: deviceBlockCreateSchema }), controller.blockDevice);
+adminOpsRouter.delete(
+  '/security/device-blocks/:id',
+  writeLimiter,
+  validate({ params: ipBlockIdParamSchema, body: ipBlockRemoveSchema }),
+  controller.unblockDevice
+);
+// Sign-up e-mail policy (read-only view of all sources; edits go through PUT /settings/ops.signup.*)
+adminOpsRouter.get('/security/signup-email-policy', controller.getSignupEmailPolicy);
+adminOpsRouter.get('/security/ip-activity', validate({ query: ipActivityQuerySchema }), controller.getIpActivity);
+
 // A3 — payment health
 adminOpsRouter.get('/payments/health', validate({ query: paymentHealthQuerySchema }), controller.getPaymentHealth);
 
@@ -100,6 +127,9 @@ adminOpsRouter.post(
   validate({ params: storeIdParamSchema, body: transferOwnerSchema }),
   controller.transferStoreOwner
 );
+
+// Delete junk stores that never did business (orders, stock movements, payments...); others: suspend
+adminOpsRouter.post('/stores/purge', writeLimiter, validate({ body: purgeStoresSchema }), controller.purgeStores);
 
 // C1 — data retention report (dry run, read-only)
 adminOpsRouter.get('/data/retention', validate({ query: retentionQuerySchema }), controller.getRetentionReport);

@@ -1,7 +1,7 @@
 #!/bin/bash
 # ==============================================================================
 # StockPilot Production Deployment Script (VPS Vietnix)
-# Domain: https://stockpilot.name.vn
+# Domain: lấy từ TENANT_ROOT_DOMAIN trong backend/.env (hiện tại: taphoasandg.com)
 #
 # Cấu trúc thư mục trên VPS:
 #   /var/www/stockpilot/
@@ -22,6 +22,12 @@ BACKEND_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$BACKEND_DIR/.." && pwd)"
 FRONTEND_DIR="$ROOT_DIR/frontend"
 ENV_FILE="$BACKEND_DIR/.env"
+
+# Repo BE và FE đều có thể kích hoạt deploy cùng lúc: chỉ cho một lượt chạy tại một thời điểm.
+if command -v flock >/dev/null 2>&1; then
+    exec 9>"$ROOT_DIR/.deploy.lock"
+    flock -w 1200 9 || { echo "❌ Đang có lượt deploy khác chạy quá 20 phút."; exit 1; }
+fi
 
 echo "=================================================================="
 echo "🚀 [$(date '+%Y-%m-%d %H:%M:%S')] BẮT ĐẦU TRIỂN KHAI STOCKPILOT (nhánh $BRANCH)"
@@ -101,7 +107,8 @@ check() {
 if check "http://127.0.0.1:5000/api/v1/health/live" && check "http://127.0.0.1:3000/api/v1/health/live"; then
     echo "=================================================================="
     echo "🎉 TRIỂN KHAI THÀNH CÔNG"
-    echo "🌐 https://stockpilot.name.vn   (API: /api/v1)"
+    DOMAIN=$(grep -E "^TENANT_ROOT_DOMAIN=" "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d "\r\"' ")
+    echo "🌐 https://${DOMAIN:-taphoasandg.com}   (API: /api/v1)"
     echo "=================================================================="
 else
     echo "❌ Hệ thống chưa phản hồi đúng. Log backend:"
