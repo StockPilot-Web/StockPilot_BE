@@ -134,8 +134,8 @@ export class ScannerService {
     });
     if (!store) throw new NotFoundError('Store not found or inactive');
 
-    // Nếu đã có session active cho store này → tái sử dụng
-    const existing = this.listSessions(storeId)[0];
+    // Nếu đã có session active cho chính user này trong store → tái sử dụng
+    const existing = this.listSessions(storeId, userId)[0];
     if (existing) {
       return existing;
     }
@@ -347,13 +347,17 @@ export class ScannerService {
   }
 
   /**
-   * List active sessions for a store (for display in POS UI).
+   * List active sessions for a store (optionally scoped to a specific userId).
    */
-  listSessions(storeId: number): ScanSession[] {
+  listSessions(storeId: number, userId?: number): ScanSession[] {
     const now = new Date();
     const result: ScanSession[] = [];
     for (const session of activeSessions.values()) {
-      if (session.storeId === storeId && session.expiresAt > now) {
+      if (
+        session.storeId === storeId &&
+        session.expiresAt > now &&
+        (userId === undefined || session.userId === userId)
+      ) {
         result.push(session);
       }
     }

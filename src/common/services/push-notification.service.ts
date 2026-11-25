@@ -162,7 +162,47 @@ export class PushNotificationService {
   }
 
   /**
-   * Send low-stock or critical stockout notification to store mobile app
+   * Send notification specifically to devices of active SHOP_OWNER users in the store
+   */
+  async sendToOwners(
+    storeId: number,
+    payload: PushMessagePayload
+  ): Promise<{ sentCount: number; failedCount: number }> {
+    const records = await this.getTokensForStore(storeId);
+    if (!records.length) {
+      return { sentCount: 0, failedCount: 0 };
+    }
+
+    const owners =
+      (await this.prisma.user?.findMany({
+        where: { storeId, role: 'SHOP_OWNER', isActive: true },
+        select: { id: true },
+      })) ?? [];
+
+    if (!owners.length) {
+      return { sentCount: 0, failedCount: 0 };
+    }
+
+    const ownerIds = new Set(owners.map((o) => o.id));
+    const ownerRecords = records.filter((rec) => ownerIds.has(rec.userId));
+    if (!ownerRecords.length) {
+      return { sentCount: 0, failedCount: 0 };
+    }
+
+    const messages = ownerRecords.map((rec) => ({
+      to: rec.token,
+      title: payload.title,
+      body: payload.body,
+      data: payload.data || {},
+      sound: payload.sound ?? 'default',
+      priority: payload.priority ?? 'high',
+    }));
+
+    return this.sendExpoBatch(storeId, messages);
+  }
+
+  /**
+   * Send low-stock or critical stockout notification to store owner's mobile app
    */
   async notifyStockAlert(
     storeId: number,
@@ -178,7 +218,7 @@ export class PushNotificationService {
       body += ` | AI đề xuất nhập: ${alert.suggestedReorderQty} cái`;
     }
 
-    return this.sendToStore(storeId, {
+    return this.sendToOwners(storeId, {
       title,
       body,
       priority: 'high',

@@ -87,11 +87,11 @@ export class ScannerController {
    */
   listSessions(req: Request, res: Response, next: NextFunction) {
     try {
-      const { storeId } = req.user!;
+      const { storeId, userId } = req.user!;
       if (!storeId) {
         return res.status(403).json({ success: false, error: { message: 'User is not associated with a store' } });
       }
-      const sessions = scannerService.listSessions(storeId);
+      const sessions = scannerService.listSessions(storeId, userId);
       return res.json({
         success: true,
         data: sessions.map((s) => ({
