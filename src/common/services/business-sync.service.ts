@@ -57,7 +57,11 @@ export class BusinessSyncService {
    * Re-evaluates risk alerts, coverage, and pricing recommendations for a list of SKUs.
    */
   async syncStockItems(storeId: number, stockItemIds: number[]): Promise<void> {
-    await this.queue.enqueue(storeId, Array.from(new Set(stockItemIds)));
+    const uniqueIds = Array.from(new Set(stockItemIds));
+    await this.queue.enqueue(storeId, uniqueIds);
+    this.checkAndPushStockAlerts(storeId, uniqueIds).catch((err) => {
+      logger.warn('syncStockItems_push_alert_failed', { err });
+    });
   }
 
   /**
@@ -116,6 +120,9 @@ export class BusinessSyncService {
    */
   async syncAfterInventoryMovement(storeId: number, stockItemIds: number[]): Promise<void> {
     await this.queue.enqueue(storeId, stockItemIds);
+    this.checkAndPushStockAlerts(storeId, stockItemIds).catch((err) => {
+      logger.warn('syncAfterInventoryMovement_push_alert_failed', { err });
+    });
   }
 
   /**
