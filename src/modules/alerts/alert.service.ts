@@ -622,17 +622,32 @@ export class AlertService {
     }
 
     const actorName = actor?.fullName || actor?.email || 'Nhân viên kho';
+    const ackTitle = `${actorName} đã xác nhận cảnh báo`;
+    const ackMessage = note ? `${alert.title}. Ghi chú: ${note}` : alert.title;
+
     await tx.notification.createMany({
       data: owners.map((owner) => ({
         storeId,
         userId: owner.id,
         type: 'alert_ack',
-        title: `${actorName} đã xác nhận cảnh báo`,
-        message: note ? `${alert.title}. Ghi chú: ${note}` : alert.title,
+        title: ackTitle,
+        message: ackMessage,
         entityType: 'ALERT',
         entityId: String(alert.id),
         isRead: false,
       })),
     });
+
+    if (process.env.NODE_ENV !== 'test') {
+      PushNotificationService.getInstance(this.prisma)
+        .sendToOwners(storeId, {
+          title: ackTitle,
+          body: ackMessage,
+          priority: 'high',
+          sound: 'default',
+          data: { type: 'ALERT_ACK', alertId: alert.id },
+        })
+        .catch(() => {});
+    }
   }
 }
