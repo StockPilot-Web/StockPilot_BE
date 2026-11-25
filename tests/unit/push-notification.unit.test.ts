@@ -1,4 +1,5 @@
 import { PushNotificationService } from '../../src/common/services/push-notification.service';
+import { ValidationError } from '../../src/common/errors/app-error';
 
 describe('PushNotificationService', () => {
   let mockPrisma: any;
@@ -82,8 +83,13 @@ describe('PushNotificationService', () => {
       );
     });
 
-    it('should throw an error for empty or invalid token', async () => {
-      await expect(pushService.registerToken(1, 10, '')).rejects.toThrow('Push token không hợp lệ.');
+    it('should reject an empty token with the unified validation error', async () => {
+      await expect(pushService.registerToken(1, 10, '')).rejects.toBeInstanceOf(ValidationError);
+      await expect(pushService.registerToken(1, 10, '')).rejects.toMatchObject({
+        statusCode: 400,
+        code: 'VALIDATION_ERROR',
+        message: 'Push token không hợp lệ.',
+      });
     });
   });
 

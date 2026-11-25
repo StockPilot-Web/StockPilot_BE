@@ -45,7 +45,7 @@ export const createAdminUserSchema = z
 
 export const updateStatusSchema = z
   .object({
-    isActive: z.boolean({ required_error: 'Vui lòng truyền isActive (true/false)' }),
+    isActive: z.boolean({ error: 'Vui lòng truyền isActive (true/false)' }),
     reason: z.string().trim().max(500).optional(),
     actorPassword: optionalActorPasswordSchema,
   })
@@ -62,7 +62,7 @@ export const revokeSessionsSchema = z
   .strict();
 
 export const settingKeyParamSchema = z.object({
-  key: z.enum(SYSTEM_SETTING_KEYS as [string, ...string[]], { errorMap: () => ({ message: 'Cài đặt không tồn tại' }) }),
+  key: z.enum(SYSTEM_SETTING_KEYS as [string, ...string[]], { error: 'Cài đặt không tồn tại' }),
 });
 
 export const updateSystemSettingSchema = z

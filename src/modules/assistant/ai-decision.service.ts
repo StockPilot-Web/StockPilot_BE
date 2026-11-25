@@ -776,8 +776,12 @@ export class AiDecisionService {
     const responseLanguage = detectAssistantLanguage(question);
     const canSeeFinancials = canViewFinancials(role);
 
-    // 1. Kiểm tra Semantic Cache (Bộ nhớ AI nội bộ) trước khi gọi Gemini API
-    const memoryHit = process.env.NODE_ENV !== 'test' ? await aiMemoryService.findSimilarAnswer(ask, 0.75) : null;
+    // 1. Chỉ dùng cache cho câu hỏi tiếng Việt. Cache hiện tại chứa FAQ tiếng Việt;
+    // dùng lại nó cho câu hỏi tiếng Anh sẽ làm sai ngôn ngữ phản hồi.
+    // Không đổi schema/kiến trúc: câu hỏi tiếng Anh luôn đi qua prompt ngôn ngữ của LLM.
+    const memoryHit = responseLanguage === 'vi' && process.env.NODE_ENV !== 'test'
+      ? await aiMemoryService.findSimilarAnswer(ask, 0.75)
+      : null;
     if (memoryHit) {
       const matchPct = Math.round(memoryHit.score * 100);
       console.log(`[AI Memory HIT] Độ khớp: ${matchPct}% - Tiết kiệm 1 lượt gọi Gemini API`);
@@ -854,13 +858,6 @@ export class AiDecisionService {
       ].join('\n'),
       maxOutputTokens: 2500,
     }, base.answer);
-
-    // 2. Tự động học (lưu lại) cặp Câu hỏi - Câu trả lời nếu Gemini trả lời thành công
-    if (ai.meta.source === 'AI' && ai.text && ai.text !== base.answer) {
-      if (process.env.NODE_ENV !== 'test') aiMemoryService.learn(ask, ai.text).catch((err) => {
-        logger.warn('ai_memory_learn_failed', { err });
-      });
-    }
 
     return { ...base, answer: ai.text, ...ai.meta };
   }
