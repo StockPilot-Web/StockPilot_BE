@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { prisma as defaultPrisma } from '../../config/db';
 import { logger } from '../logger';
+import { ValidationError } from '../errors/app-error';
 
 export interface PushTokenRecord {
   token: string;
@@ -54,7 +55,7 @@ export class PushNotificationService {
     meta?: { platform?: 'ios' | 'android' | 'web'; deviceName?: string }
   ): Promise<{ success: boolean; totalTokens: number }> {
     if (!token || typeof token !== 'string') {
-      throw new Error('Push token không hợp lệ.');
+      throw new ValidationError('Push token không hợp lệ.');
     }
 
     const key = this.getStoreSettingKey(storeId);

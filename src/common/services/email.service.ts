@@ -82,14 +82,14 @@ export async function sendRegisterOtpEmail({ to, name, otp, expiresMinutes = 10 
   const pass = process.env.SMTP_PASS || process.env.GMAIL_PASS || process.env.GMAIL_APP_PASSWORD || '';
   const from = process.env.EMAIL_FROM || (user ? `"StockPilot" <${user}>` : '"StockPilot Vietnam" <no-reply@stockpilot.name.vn>');
 
-  if (!user || !pass) {
-    logger.info(`[Email Service - Giả lập SMTP] Không có SMTP_USER/SMTP_PASS, hiển thị mã OTP đăng ký ra console:`);
-    console.log('\n======================================================');
-    console.log(`📩 [STOCKPILOT REGISTER OTP GMAIL SERVICE]`);
-    console.log(`   Đến:     ${to}`);
-    console.log(`   Mã OTP:  >>> ${otp} <<<`);
-    console.log(`   Hết hạn: ${expiresMinutes} phút`);
-    console.log('======================================================\n');
+  // Tests must never contact a real SMTP server, even when a developer's .env
+  // contains SMTP credentials. This keeps API tests deterministic and prevents
+  // an external network timeout from leaving Supertest requests open.
+  if (process.env.NODE_ENV === 'test' || !user || !pass) {
+    logger.warn('otp_email_simulated', {
+      flow: 'registration',
+      reason: process.env.NODE_ENV === 'test' ? 'test_environment' : 'smtp_not_configured',
+    });
     return { sent: false, simulated: true };
   }
 
@@ -98,6 +98,9 @@ export async function sendRegisterOtpEmail({ to, name, otp, expiresMinutes = 10 
       host,
       port,
       secure,
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
       auth: { user, pass },
       tls: {
         rejectUnauthorized: process.env.NODE_ENV === 'production',
@@ -116,11 +119,6 @@ export async function sendRegisterOtpEmail({ to, name, otp, expiresMinutes = 10 
     return { sent: true };
   } catch (err: any) {
     logger.error(`[Email Service] Gửi email đăng ký qua SMTP thất bại: ${err?.message || err}`);
-    console.log('\n======================================================');
-    console.log(`⚠️ Gửi SMTP thất bại, mã OTP dự phòng:`);
-    console.log(`   Đến:     ${to}`);
-    console.log(`   Mã OTP:  >>> ${otp} <<<`);
-    console.log('======================================================\n');
     return { sent: false, simulated: true };
   }
 }
@@ -198,15 +196,14 @@ export async function sendPasswordResetOtpEmail({ to, name, otp, expiresMinutes 
   const pass = process.env.SMTP_PASS || process.env.GMAIL_PASS || process.env.GMAIL_APP_PASSWORD || '';
   const from = process.env.EMAIL_FROM || (user ? `"StockPilot" <${user}>` : '"StockPilot Vietnam" <no-reply@stockpilot.name.vn>');
 
-  // Nếu chưa cấu hình tài khoản SMTP, ghi log nổi bật ra terminal để tiện test
-  if (!user || !pass) {
-    logger.info(`[Email Service - Giả lập SMTP] Không có SMTP_USER/SMTP_PASS, hiển thị mã OTP ra console:`);
-    console.log('\n======================================================');
-    console.log(`📩 [STOCKPILOT OTP GMAIL SERVICE]`);
-    console.log(`   Đến:     ${to}`);
-    console.log(`   Mã OTP:  >>> ${otp} <<<`);
-    console.log(`   Hết hạn: ${expiresMinutes} phút`);
-    console.log('======================================================\n');
+  // Tests must never contact a real SMTP server, even when a developer's .env
+  // contains SMTP credentials. This keeps API tests deterministic and prevents
+  // an external network timeout from leaving Supertest requests open.
+  if (process.env.NODE_ENV === 'test' || !user || !pass) {
+    logger.warn('otp_email_simulated', {
+      flow: 'password_reset',
+      reason: process.env.NODE_ENV === 'test' ? 'test_environment' : 'smtp_not_configured',
+    });
     return { sent: false, simulated: true };
   }
 
@@ -215,6 +212,9 @@ export async function sendPasswordResetOtpEmail({ to, name, otp, expiresMinutes 
       host,
       port,
       secure,
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
       auth: { user, pass },
       tls: {
         rejectUnauthorized: process.env.NODE_ENV === 'production',
@@ -233,11 +233,6 @@ export async function sendPasswordResetOtpEmail({ to, name, otp, expiresMinutes 
     return { sent: true };
   } catch (err: any) {
     logger.error(`[Email Service] Gửi email qua SMTP thất bại: ${err?.message || err}`);
-    console.log('\n======================================================');
-    console.log(`⚠️ Gửi SMTP thất bại, mã OTP dự phòng:`);
-    console.log(`   Đến:     ${to}`);
-    console.log(`   Mã OTP:  >>> ${otp} <<<`);
-    console.log('======================================================\n');
     return { sent: false, simulated: true };
   }
 }

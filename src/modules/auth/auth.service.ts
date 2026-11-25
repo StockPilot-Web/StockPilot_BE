@@ -85,7 +85,7 @@ export class AuthService {
     }
 
     // Sinh OTP 6 chữ số ngẫu nhiên
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = crypto.randomInt(100000, 1_000_000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 phút
 
     // Lưu vào bộ nhớ kèm thời gian gửi và khởi tạo số lần thử
@@ -594,7 +594,7 @@ export class AuthService {
     }
 
     // Sinh mã OTP 6 chữ số ngẫu nhiên và token kèm chữ ký HMAC
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = crypto.randomInt(100000, 1_000_000).toString();
     const sig = crypto
       .createHmac('sha256', env.JWT_SECRET || 'stockpilot_secret')
       .update(`${user.id}:${otp}:${expiresAt.getTime()}`)

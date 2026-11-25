@@ -70,13 +70,13 @@ export class PosService {
         return { item, stockItem, unitPrice, costPrice, subtotal };
       });
 
-      const discountAmount = new Prisma.Decimal(input.discountAmount || 0).toDecimalPlaces(2);
-      const taxAmount = new Prisma.Decimal(input.taxAmount || 0).toDecimalPlaces(2);
+      const discountAmount = new Prisma.Decimal(Number(input.discountAmount || 0)).toDecimalPlaces(2);
+      const taxAmount = new Prisma.Decimal(Number(input.taxAmount || 0)).toDecimalPlaces(2);
       if (discountAmount.gt(subtotalAmount)) {
         throw new ValidationError('POS sale discount cannot exceed subtotal');
       }
       const totalAmount = subtotalAmount.minus(discountAmount).plus(taxAmount).toDecimalPlaces(2);
-      if (input.totalAmount !== undefined && !new Prisma.Decimal(input.totalAmount).equals(totalAmount)) {
+      if (input.totalAmount !== undefined && !new Prisma.Decimal(Number(input.totalAmount)).equals(totalAmount)) {
         throw new ValidationError('Tổng tiền thanh toán không khớp với tính toán của hệ thống');
       }
       const orderItemsData: Prisma.OrderItemUncheckedCreateWithoutOrderInput[] = [];

@@ -16,7 +16,7 @@ const messageBody = z
 export const createTicketSchema = z
   .object({
     subject: z.string().trim().min(5, 'Tiêu đề cần ít nhất 5 ký tự').max(200),
-    category: z.enum(SUPPORT_CATEGORIES, { errorMap: () => ({ message: 'Vui lòng chọn loại yêu cầu' }) }),
+    category: z.enum(SUPPORT_CATEGORIES, { error: 'Vui lòng chọn loại yêu cầu' }),
     message: messageBody,
   })
   .strict();

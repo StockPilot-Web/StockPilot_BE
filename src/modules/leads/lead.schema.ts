@@ -18,7 +18,7 @@ export const leadListQuerySchema = paginationQuerySchema.extend({
 
 export const updateLeadSchema = z
   .object({
-    status: z.enum(LEAD_STATUSES, { errorMap: () => ({ message: 'Trạng thái lead không hợp lệ' }) }).optional(),
+    status: z.enum(LEAD_STATUSES, { error: 'Trạng thái lead không hợp lệ' }).optional(),
     assigneeId: z.number().int().positive().nullable().optional(),
   })
   .strict()
@@ -26,7 +26,7 @@ export const updateLeadSchema = z
 
 /** Legacy body for PATCH /admin/leads/:id/status. */
 export const updateLeadStatusSchema = z
-  .object({ status: z.enum(LEAD_STATUSES, { errorMap: () => ({ message: 'Trạng thái lead không hợp lệ' }) }) })
+  .object({ status: z.enum(LEAD_STATUSES, { error: 'Trạng thái lead không hợp lệ' }) })
   .strict();
 
 export const addLeadNoteSchema = z

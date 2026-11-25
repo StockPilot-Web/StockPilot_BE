@@ -11,6 +11,7 @@ export class SynthesizerAgent {
     specialists: SpecialistInsight[]
   ): string {
     const isOwner = ctx.canSeeFinancials;
+    const isEnglish = ctx.responseLanguage === 'en';
 
     const roleConstraint = isOwner
       ? 'Đóng vai trò Trợ lý Cá nhân AI đắc lực (Pilot AI) của Chủ cửa hàng. Giao tiếp tự nhiên, tận tâm, xưng "Em" và gọi "Anh/chị".'
@@ -22,11 +23,16 @@ export class SynthesizerAgent {
 
     const intentSpecificRules = this.getIntentRules(intent, isOwner);
 
+    const languageRule = isEnglish
+      ? 'LANGUAGE: Answer entirely in natural English. Never answer in Vietnamese unless the user explicitly asks for Vietnamese.'
+      : 'NGÔN NGỮ: Trả lời hoàn toàn bằng tiếng Việt tự nhiên.';
+
     return [
       'Bạn là Pilot AI — Hệ thống Đa Tác tử (Multi-Agent System) Cố vấn Quản trị Kho & Bán lẻ StockPilot tại Việt Nam.',
       '',
       'VAI TRÒ VÀ NGUYÊN TẮC CỐT LÕI:',
       roleConstraint,
+      languageRule,
       '',
       'KẾT QUẢ ĐÃ PHÂN TÍCH TỪ CÁC AGENT CHUYÊN TRÁCH:',
       specialistSummary,
@@ -65,6 +71,16 @@ export class SynthesizerAgent {
           '- Đề xuất các combo sản phẩm bán kèm (sản phẩm bán chạy đi kèm sản phẩm tồn nhiều để kích cầu).',
           '- Gợi ý chiến lược giá bán hoặc chương trình ưu đãi khả thi cho chủ cửa hàng.',
         ].join('\n');
+
+      case 'TAX_SUPPORT':
+        return isOwner
+          ? [
+              '- Đây là câu hỏi thuộc luồng kết hợp: số liệu doanh thu/ngưỡng được lấy từ StockPilot, còn AI bên ngoài chỉ giải thích và hướng dẫn theo các facts đã cung cấp.',
+              '- Dùng chính xác các trường `taxSupport` trong `<store_data>`; không tự tính lại, không bịa số liệu và không khẳng định thay cho kế toán/cơ quan thuế.',
+              '- Nêu rõ đây là thông tin hỗ trợ tham khảo; với quy định pháp luật hoặc cách kê khai cụ thể, khuyến nghị xác nhận với kế toán/cơ quan thuế.',
+              '- Nếu người dùng hỏi sổ S1a/S2a, hướng dẫn vào chức năng Sổ doanh thu để xem trước hoặc tải CSV.',
+            ].join('\n')
+          : '- Từ chối lịch sự các số liệu doanh thu/ngưỡng thuế vì tài khoản nhân viên không có quyền xem dữ liệu tài chính.';
 
       case 'GENERAL_CHAT':
       default:

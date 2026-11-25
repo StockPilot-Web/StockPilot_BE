@@ -19,7 +19,7 @@ export const historicalSaleRowSchema = z
     unitPrice: z.coerce.number().min(0, 'Đơn giá không được âm'),
     costPrice: optionalHistoricalCostSchema,
     unitCost: optionalHistoricalCostSchema,
-    soldAt: z.coerce.date({ errorMap: () => ({ message: 'Ngày bán soldAt không hợp lệ' }) }),
+    soldAt: z.coerce.date({ error: 'Ngày bán soldAt không hợp lệ' }),
     source: z.string().trim().min(1).max(50).default('CSV'),
   })
   .superRefine((row, ctx) => {

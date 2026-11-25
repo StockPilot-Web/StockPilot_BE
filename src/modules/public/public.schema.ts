@@ -2,12 +2,12 @@ import { z } from 'zod';
 
 export const createLeadSchema = z.object({
   fullName: z
-    .string({ required_error: 'Vui lòng nhập họ và tên' })
+    .string({ error: 'Vui lòng nhập họ và tên' })
     .trim()
     .min(2, 'Họ và tên phải có ít nhất 2 ký tự')
     .max(100, 'Họ và tên không vượt quá 100 ký tự'),
   phone: z
-    .string({ required_error: 'Vui lòng nhập số điện thoại' })
+    .string({ error: 'Vui lòng nhập số điện thoại' })
     .trim()
     .min(9, 'Số điện thoại không hợp lệ')
     .max(20, 'Số điện thoại không hợp lệ')
