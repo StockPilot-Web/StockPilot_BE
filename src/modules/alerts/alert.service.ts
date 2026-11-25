@@ -3,6 +3,7 @@ import { PrismaClient, Prisma, AlertType, AlertSeverity, AlertStatus, Role } fro
 import { prisma as defaultPrisma } from '../../config/db';
 import { ConflictError, NotFoundError } from '../../common/errors/app-error';
 import { AuditLogService } from '../../common/services/audit-log.service';
+import { PushNotificationService } from '../../common/services/push-notification.service';
 import { canViewFinancials } from '../../common/utils/role-access';
 import { logger } from '../../common/logger';
 import { classifyRisk } from '../decision-engine/risk-classification';
@@ -280,7 +281,7 @@ export class AlertService {
           },
         });
 
-        await this.notifyStoreUsers(db, storeId, createdAlert.id, trigger.title, trigger.message);
+        await this.notifyStoreUsers(db, storeId, createdAlert.id, trigger.type, trigger.title, trigger.message);
       } else {
         // Edge-triggered: an alert the owner resolved by hand stays resolved while its condition
         // persists; it reopens only after the engine has seen the condition clear (resolvedBy ENGINE).
@@ -307,7 +308,7 @@ export class AlertService {
         });
 
         if (shouldReopen) {
-          await this.notifyStoreUsers(db, storeId, existing.id, trigger.title, trigger.message);
+          await this.notifyStoreUsers(db, storeId, existing.id, trigger.type, trigger.title, trigger.message);
         }
       }
     }
@@ -363,6 +364,7 @@ export class AlertService {
     db: Prisma.TransactionClient | PrismaClient,
     storeId: number,
     alertId: number,
+    alertType: AlertType,
     title: string,
     message: string
   ) {
@@ -384,6 +386,20 @@ export class AlertService {
             isRead: false,
           })),
         });
+      }
+
+      // Send real-time Expo Push to logged-in Shop Owners for engine alerts
+      // (STOCKOUT & LOW_STOCK are already pushed immediately by BusinessSyncService.checkAndPushStockAlerts)
+      if (alertType !== 'STOCKOUT' && alertType !== 'LOW_STOCK' && process.env.NODE_ENV !== 'test') {
+        PushNotificationService.getInstance(this.prisma)
+          .sendToOwners(storeId, {
+            title,
+            body: message,
+            priority: 'high',
+            sound: 'default',
+            data: { type: 'STOCK_ALERT', alertType, alertId },
+          })
+          .catch(() => {});
       }
     } catch (err) {
       // Ignore notification dispatch error so alert creation is not blocked
