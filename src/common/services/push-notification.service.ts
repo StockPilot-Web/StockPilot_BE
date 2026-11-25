@@ -168,15 +168,18 @@ export class PushNotificationService {
     storeId: number,
     payload: PushMessagePayload
   ): Promise<{ sentCount: number; failedCount: number }> {
-    const [records, owners] = await Promise.all([
-      this.getTokensForStore(storeId),
-      this.prisma.user.findMany({
+    const records = await this.getTokensForStore(storeId);
+    if (!records.length) {
+      return { sentCount: 0, failedCount: 0 };
+    }
+
+    const owners =
+      (await this.prisma.user?.findMany({
         where: { storeId, role: 'SHOP_OWNER', isActive: true },
         select: { id: true },
-      }),
-    ]);
+      })) ?? [];
 
-    if (!records.length || !owners.length) {
+    if (!owners.length) {
       return { sentCount: 0, failedCount: 0 };
     }
 

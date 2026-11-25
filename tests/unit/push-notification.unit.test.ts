@@ -12,6 +12,9 @@ describe('PushNotificationService', () => {
         upsert: jest.fn(),
         update: jest.fn(),
       },
+      user: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
     };
     pushService = new PushNotificationService(mockPrisma);
   });
