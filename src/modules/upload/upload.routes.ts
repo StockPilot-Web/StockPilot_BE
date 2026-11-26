@@ -25,6 +25,9 @@ const upload = multer({
   },
 });
 
+// Public read for locally stored fallback images
+uploadRouter.get('/files/:filename', (req, res, next) => controller.serveImage(req, res, next));
+
 // Tất cả endpoint upload cần đăng nhập
 uploadRouter.use(authMiddleware);
 
