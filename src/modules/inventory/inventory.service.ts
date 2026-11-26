@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { prisma as defaultPrisma } from '../../config/db';
-import { NotFoundError } from '../../common/errors/app-error';
+import { NotFoundError, ValidationError } from '../../common/errors/app-error';
 import { z } from 'zod';
 import { inflowSchema, outflowSchema, auditSchema } from './inventory.schema';
 import { StockLedgerService } from './stock-ledger.service';
@@ -136,11 +136,17 @@ export class InventoryService {
 
       for (const item of sortedItems) {
         const stockItem = await tx.stockItem.findFirst({
-          where: { id: item.stockItemId, storeId, isActive: true },
+          where: { id: item.stockItemId, storeId },
+          include: { product: { select: { isActive: true } } },
         });
 
         if (!stockItem) {
           throw new NotFoundError(`Sản phẩm/Mã SP ID ${item.stockItemId} không tồn tại trong cửa hàng`);
+        }
+        if (!stockItem.isActive || stockItem.product?.isActive === false) {
+          throw new ValidationError(
+            `Sản phẩm "${stockItem.name}" (${stockItem.sku}) đã ngừng bán. Vui lòng mở bán lại để điều chỉnh kho.`
+          );
         }
 
         // Ensure balance record exists prior to locking
