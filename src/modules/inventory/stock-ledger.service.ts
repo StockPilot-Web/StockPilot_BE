@@ -67,9 +67,9 @@ export class StockLedgerService {
       if (!stockItem) {
         throw new NotFoundError(`Sản phẩm/Mã SP ID ${item.stockItemId} không tồn tại trong cửa hàng`);
       }
-      if (!stockItem.isActive || stockItem.product?.isActive === false) {
+      if (stockItem.isActive === false || stockItem.product?.isActive === false) {
         throw new ValidationError(
-          `Sản phẩm "${stockItem.name}" (${stockItem.sku}) đã ngừng bán. Vui lòng mở bán lại để xuất kho.`
+          `Sản phẩm "${stockItem.name || stockItem.sku}" (${stockItem.sku}) đã ngừng bán. Vui lòng mở bán lại để xuất kho.`
         );
       }
 
@@ -164,9 +164,9 @@ export class StockLedgerService {
       if (!stockItem) {
         throw new NotFoundError(`Sản phẩm/Mã SP ID ${item.stockItemId} không tồn tại trong cửa hàng`);
       }
-      if (!stockItem.isActive || stockItem.product?.isActive === false) {
+      if (stockItem.isActive === false || stockItem.product?.isActive === false) {
         throw new ValidationError(
-          `Sản phẩm "${stockItem.name}" (${stockItem.sku}) đã ngừng bán. Vui lòng mở bán lại để nhập kho.`
+          `Sản phẩm "${stockItem.name || stockItem.sku}" (${stockItem.sku}) đã ngừng bán. Vui lòng mở bán lại để nhập kho.`
         );
       }
 
