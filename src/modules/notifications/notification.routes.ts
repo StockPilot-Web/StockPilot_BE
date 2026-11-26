@@ -16,6 +16,15 @@ notificationRouter.use(requireRole(...storeOperatorRoles));
 
 notificationRouter.post('/push-token', (req, res, next) => controller.registerPushToken(req, res, next));
 notificationRouter.post('/test-push', (req, res, next) => controller.testPush(req, res, next));
+notificationRouter.get('/restock-proposals', requireRole(Role.SHOP_OWNER), (req, res, next) =>
+  controller.listRestockProposals(req, res, next)
+);
+notificationRouter.post('/restock-proposals/:id/approve', requireRole(Role.SHOP_OWNER), (req, res, next) =>
+  controller.approveRestockProposal(req, res, next)
+);
+notificationRouter.post('/restock-proposals/:id/reject', requireRole(Role.SHOP_OWNER), (req, res, next) =>
+  controller.rejectRestockProposal(req, res, next)
+);
 notificationRouter.get('/settings', (req, res, next) => controller.getSettings(req, res, next));
 notificationRouter.put('/settings', (req, res, next) => controller.updateSettings(req, res, next));
 notificationRouter.get('/', validate({ query: notificationListQuerySchema }), (req, res, next) =>

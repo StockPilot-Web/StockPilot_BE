@@ -6,7 +6,7 @@ import { DailySalesSummaryService } from '../../modules/daily-sales-summary/dail
 import { DecisionRecomputeQueue } from '../../modules/decision-engine/recompute-queue';
 import { toBusinessDateKey } from '../utils/business-date';
 import { logger } from '../logger';
-import { PushNotificationService } from './push-notification.service';
+import { AutonomousRestockService } from '../../modules/assistant/autonomous-restock.service';
 
 /**
  * Post-commit trigger facade for the Decision Engine.
@@ -76,39 +76,17 @@ export class BusinessSyncService {
   }
 
   /**
-   * Evaluates if any sold items have dropped below minStockLevel and dispatches push notifications.
+   * Evaluates if any sold items have dropped below minStockLevel, drafts AI restock proposals,
+   * and dispatches actionable push notifications to store owners.
    */
   async checkAndPushStockAlerts(storeId: number, stockItemIds: number[]): Promise<void> {
     if (!stockItemIds.length) return;
     try {
-      const stockItems = await this.prisma.stockItem.findMany({
-        where: {
-          storeId,
-          id: { in: stockItemIds },
-          isActive: true,
-        },
-        include: {
-          balances: true,
-        },
-      });
-
-      const pushService = PushNotificationService.getInstance(this.prisma);
-
-      for (const item of stockItems) {
-        const totalQty = item.balances.reduce((acc, b) => acc + (b.quantity - b.reservedQuantity), 0);
-        if (totalQty <= item.minStockLevel) {
-          const suggestedReorderQty = Math.max(0, item.maxStockLevel - totalQty);
-          await pushService.notifyStockAlert(storeId, {
-            productName: item.name,
-            sku: item.sku,
-            currentStock: totalQty,
-            minStockLevel: item.minStockLevel,
-            suggestedReorderQty,
-          }).catch((err) => {
-            logger.warn('push_stock_alert_item_error', { itemId: item.id, err });
-          });
-        }
-      }
+      await AutonomousRestockService.getInstance(this.prisma)
+        .evaluateAndPropose(storeId, stockItemIds)
+        .catch((err) => {
+          logger.warn('autonomous_restock_evaluate_failed', { storeId, err });
+        });
     } catch (err) {
       logger.warn('checkAndPushStockAlerts_error', { storeId, err });
     }

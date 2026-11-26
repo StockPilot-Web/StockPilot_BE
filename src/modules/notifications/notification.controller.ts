@@ -3,6 +3,7 @@ import { NotificationService } from './notification.service';
 import { prisma } from '../../config/db';
 import { canViewFinancials } from '../../common/utils/role-access';
 import { PushNotificationService } from '../../common/services/push-notification.service';
+import { AutonomousRestockService, RestockProposalStatus } from '../assistant/autonomous-restock.service';
 
 const notificationService = new NotificationService();
 
@@ -134,6 +135,61 @@ export class NotificationController {
       return res.status(200).json({
         success: true,
         message: 'Đã gửi thông báo kiểm tra đến thiết bị của cửa hàng',
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async listRestockProposals(req: Request, res: Response, next: NextFunction) {
+    try {
+      const storeId = req.user!.storeId!;
+      const status = typeof req.query.status === 'string' ? (req.query.status as RestockProposalStatus) : undefined;
+      const proposals = await AutonomousRestockService.getInstance(prisma).listProposals(storeId, status);
+      return res.status(200).json({
+        success: true,
+        data: proposals,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async approveRestockProposal(req: Request, res: Response, next: NextFunction) {
+    try {
+      const storeId = req.user!.storeId!;
+      const userId = req.user!.userId;
+      const proposalId = String(req.params.id);
+      const quantity = req.body?.quantity !== undefined ? Number(req.body.quantity) : undefined;
+      const note = typeof req.body?.note === 'string' ? req.body.note : undefined;
+
+      const result = await AutonomousRestockService.getInstance(prisma).approveProposal(
+        storeId,
+        userId,
+        proposalId,
+        quantity,
+        note
+      );
+      return res.status(200).json({
+        success: true,
+        message: 'Đã duyệt đề xuất nhập hàng và cộng tồn kho thành công',
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async rejectRestockProposal(req: Request, res: Response, next: NextFunction) {
+    try {
+      const storeId = req.user!.storeId!;
+      const userId = req.user!.userId;
+      const proposalId = String(req.params.id);
+      const result = await AutonomousRestockService.getInstance(prisma).rejectProposal(storeId, userId, proposalId);
+      return res.status(200).json({
+        success: true,
+        message: 'Đã bỏ qua đề xuất nhập hàng',
         data: result,
       });
     } catch (error) {
