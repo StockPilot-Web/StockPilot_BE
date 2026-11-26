@@ -56,6 +56,8 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-3}
     ports:
       - "127.0.0.1:5000:5000"
+    volumes:
+      - uploads_data:/app/data/uploads
     networks:
       - stockpilot-net
 
@@ -77,6 +79,7 @@ services:
 
 volumes:
   mysql_data:
+  uploads_data:
 
 networks:
   stockpilot-net:

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { uploadImageBuffer } from './upload.service';
+import { uploadImageBuffer, getLocalUploadPath } from './upload.service';
 
 export class UploadController {
   /**
@@ -35,7 +35,7 @@ export class UploadController {
         });
       }
 
-      const result = await uploadImageBuffer(req.file.buffer, 'stockpilot');
+      const result = await uploadImageBuffer(req.file.buffer, 'stockpilot', req.file.mimetype);
 
       return res.status(200).json({
         success: true,
@@ -49,6 +49,22 @@ export class UploadController {
           bytes: result.bytes,
         },
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async serveImage(req: Request, res: Response, next: NextFunction) {
+    try {
+      const filePath = getLocalUploadPath(String(req.params.filename || ''));
+      if (!filePath) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Không tìm thấy ảnh' },
+        });
+      }
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.sendFile(filePath);
     } catch (error) {
       next(error);
     }
