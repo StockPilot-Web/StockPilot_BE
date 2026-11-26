@@ -9,6 +9,8 @@ export const paginationQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(1000).default(20),
   sort: z.string().optional(),
   order: z.enum(['asc', 'desc']).optional().default('desc'),
+  q: z.string().trim().max(100, 'Từ khóa tìm kiếm không được vượt quá 100 ký tự').optional(),
+  search: z.string().trim().max(100, 'Từ khóa tìm kiếm không được vượt quá 100 ký tự').optional(),
 });
 
 export const productListQuerySchema = paginationQuerySchema.extend({

@@ -108,7 +108,7 @@ export class AuthController {
       const user = await this.authService.updateMe(userId, req.body);
       return res.status(200).json({
         success: true,
-        message: 'Cap nhat ho so thanh cong',
+        message: 'Cập nhật hồ sơ thành công',
         data: user,
       });
     } catch (error) {

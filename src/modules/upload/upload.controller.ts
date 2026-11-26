@@ -1,5 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
 import { uploadImageBuffer } from './upload.service';
+import { InvalidFileTypeError } from '../../common/errors/app-error';
+
+function hasSupportedImageSignature(buffer: Buffer): boolean {
+  const isJpeg = buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  const isPng = buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  const isGif = buffer.length >= 6 && ['GIF87a', 'GIF89a'].includes(buffer.subarray(0, 6).toString('ascii'));
+  const isWebp = buffer.length >= 12 && buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP';
+  const isAvif = buffer.length >= 12 && buffer.subarray(4, 8).toString('ascii') === 'ftyp' && ['avif', 'avis'].includes(buffer.subarray(8, 12).toString('ascii'));
+  return isJpeg || isPng || isGif || isWebp || isAvif;
+}
 
 export class UploadController {
   /**
@@ -18,13 +28,11 @@ export class UploadController {
       // Kiểm tra MIME type
       const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
       if (!allowedMimes.includes(req.file.mimetype)) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'INVALID_FILE_TYPE',
-            message: 'Chỉ chấp nhận ảnh định dạng JPG, PNG, WEBP, GIF',
-          },
-        });
+        throw new InvalidFileTypeError();
+      }
+
+      if (!hasSupportedImageSignature(req.file.buffer)) {
+        throw new InvalidFileTypeError('File không phải ảnh hợp lệ hoặc đã bị đổi phần mở rộng. Vui lòng chọn ảnh JPG, PNG, WEBP, GIF hoặc AVIF.');
       }
 
       // Giới hạn 10MB

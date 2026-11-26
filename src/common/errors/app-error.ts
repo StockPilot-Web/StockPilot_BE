@@ -1,5 +1,8 @@
 export type ErrorCode =
   | 'VALIDATION_ERROR'
+  | 'PAYLOAD_TOO_LARGE'
+  | 'INVALID_FILE_TYPE'
+  | 'FILE_TOO_LARGE'
   | 'UNAUTHENTICATED'
   | 'FORBIDDEN'
   | 'NOT_FOUND'
@@ -28,6 +31,24 @@ export class AppError extends Error {
 export class ValidationError extends AppError {
   constructor(message = 'Dữ liệu không hợp lệ', details?: any) {
     super(message, 400, 'VALIDATION_ERROR', details);
+  }
+}
+
+export class PayloadTooLargeError extends AppError {
+  constructor(message = 'Dữ liệu gửi lên quá lớn. Vui lòng rút gọn nội dung và thử lại.') {
+    super(message, 413, 'PAYLOAD_TOO_LARGE');
+  }
+}
+
+export class InvalidFileTypeError extends AppError {
+  constructor(message = 'File không phải ảnh hợp lệ. Chỉ chấp nhận JPG, PNG, WEBP, GIF hoặc AVIF.') {
+    super(message, 400, 'INVALID_FILE_TYPE');
+  }
+}
+
+export class FileTooLargeError extends AppError {
+  constructor(message = 'Ảnh vượt quá giới hạn 10 MB. Vui lòng chọn ảnh nhỏ hơn.') {
+    super(message, 413, 'FILE_TOO_LARGE');
   }
 }
 

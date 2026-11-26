@@ -1,10 +1,20 @@
 import { Request, Response, NextFunction } from 'express';
-import { AppError } from '../errors/app-error';
+import { AppError, FileTooLargeError, InvalidFileTypeError, PayloadTooLargeError } from '../errors/app-error';
 import { env } from '../../config/env';
 import { logger } from '../logger';
 
 export function errorHandler(err: Error, req: Request, res: Response, _next: NextFunction) {
   const requestId = (req as any).requestId || req.headers['x-request-id'] || 'unknown';
+
+  if ((err as any).type === 'entity.too.large') {
+    err = new PayloadTooLargeError();
+  } else if ((err as any).code === 'LIMIT_FILE_SIZE') {
+    err = new FileTooLargeError();
+  } else if ((err as any).message === 'INVALID_FILE_TYPE') {
+    err = new InvalidFileTypeError();
+  } else if (err instanceof SyntaxError && (err as any).status === 400) {
+    err = new AppError('Dữ liệu JSON không hợp lệ. Vui lòng kiểm tra dấu ngoặc kép và định dạng JSON.', 400, 'VALIDATION_ERROR');
+  }
 
   if (err instanceof AppError) {
     return res.status(err.statusCode).json({

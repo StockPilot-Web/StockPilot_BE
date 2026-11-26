@@ -16,8 +16,8 @@ productRouter.use(requireStoreScope);
 productRouter.get('/', validate({ query: productListQuerySchema }), (req, res, next) => controller.list(req, res, next));
 productRouter.get('/:id', validate({ params: idParamSchema }), (req, res, next) => controller.getById(req, res, next));
 
-// Mutating endpoints: SHOP_OWNER and WAREHOUSE_STAFF can create and update products; only SHOP_OWNER can delete
-productRouter.post('/', requireRole('SHOP_OWNER', 'WAREHOUSE_STAFF'), validate({ body: createProductSchema }), (req, res, next) => controller.create(req, res, next));
+// Product master-data creation/deletion is owner-only; Staff may update operational fields where permitted.
+productRouter.post('/', requireRole('SHOP_OWNER'), validate({ body: createProductSchema }), (req, res, next) => controller.create(req, res, next));
 productRouter.put(
   '/:id',
   requireRole('SHOP_OWNER', 'WAREHOUSE_STAFF'),
