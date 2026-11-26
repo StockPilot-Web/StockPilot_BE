@@ -1,5 +1,5 @@
 import { PrismaClient, MovementType } from '@prisma/client';
-import { InsufficientStockError, NotFoundError } from '../../common/errors/app-error';
+import { InsufficientStockError, NotFoundError, ValidationError } from '../../common/errors/app-error';
 
 type TransactionClient = Omit<
   PrismaClient,
@@ -60,11 +60,17 @@ export class StockLedgerService {
 
       // 1. Verify SKU exists and is active in store
       const stockItem = await tx.stockItem.findFirst({
-        where: { id: item.stockItemId, storeId: context.storeId, isActive: true },
+        where: { id: item.stockItemId, storeId: context.storeId },
+        include: { product: { select: { isActive: true } } },
       });
 
       if (!stockItem) {
-        throw new NotFoundError(`Sản phẩm/Mã SP ID ${item.stockItemId} không tồn tại hoặc đã ngừng hoạt động`);
+        throw new NotFoundError(`Sản phẩm/Mã SP ID ${item.stockItemId} không tồn tại trong cửa hàng`);
+      }
+      if (!stockItem.isActive || stockItem.product?.isActive === false) {
+        throw new ValidationError(
+          `Sản phẩm "${stockItem.name}" (${stockItem.sku}) đã ngừng bán. Vui lòng mở bán lại để xuất kho.`
+        );
       }
 
       // 2. Perform atomic decrement with conditional gte check
@@ -151,11 +157,17 @@ export class StockLedgerService {
         : context.idempotencyKey;
 
       const stockItem = await tx.stockItem.findFirst({
-        where: { id: item.stockItemId, storeId: context.storeId, isActive: true },
+        where: { id: item.stockItemId, storeId: context.storeId },
+        include: { product: { select: { isActive: true } } },
       });
 
       if (!stockItem) {
-        throw new NotFoundError(`Sản phẩm/Mã SP ID ${item.stockItemId} không tồn tại hoặc đã ngừng hoạt động`);
+        throw new NotFoundError(`Sản phẩm/Mã SP ID ${item.stockItemId} không tồn tại trong cửa hàng`);
+      }
+      if (!stockItem.isActive || stockItem.product?.isActive === false) {
+        throw new ValidationError(
+          `Sản phẩm "${stockItem.name}" (${stockItem.sku}) đã ngừng bán. Vui lòng mở bán lại để nhập kho.`
+        );
       }
 
       // Atomic upsert / increment
