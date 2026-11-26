@@ -21,9 +21,22 @@ export class CategoryService {
     const limit = Number(query?.limit) || 20;
     const skip = (page - 1) * limit;
 
+    const keyword = String(query?.q || query?.search || '').trim();
+    const where: Prisma.CategoryWhereInput = {
+      storeId,
+      ...(keyword
+        ? {
+            OR: [
+              { name: { contains: keyword } },
+              { code: { contains: keyword.toUpperCase() } },
+            ],
+          }
+        : {}),
+    };
+
     const [items, total] = await Promise.all([
       this.prisma.category.findMany({
-        where: { storeId },
+        where,
         include: {
           _count: {
             select: { products: true },
@@ -33,7 +46,7 @@ export class CategoryService {
         skip,
         take: limit,
       }),
-      this.prisma.category.count({ where: { storeId } }),
+      this.prisma.category.count({ where }),
     ]);
 
     return {
@@ -64,6 +77,7 @@ export class CategoryService {
 
   async createCategory(storeId: number, input: z.infer<typeof createCategorySchema>, userId?: number) {
     const code = input.code.toUpperCase().trim();
+    const name = input.name.trim();
     const existing = await this.prisma.category.findUnique({
       where: {
         storeId_code: {
@@ -77,12 +91,20 @@ export class CategoryService {
       throw new ConflictError(CATEGORY_DUPLICATE_CODE_MESSAGE);
     }
 
+    const existingName = await this.prisma.category.findFirst({
+      where: { storeId, name: { equals: name } },
+      select: { id: true },
+    });
+    if (existingName) {
+      throw new ConflictError(`Tên danh mục "${name}" đã tồn tại trong cửa hàng. Vui lòng chọn tên khác.`);
+    }
+
     try {
       return await this.prisma.$transaction(async (tx) => {
         const category = await tx.category.create({
           data: {
             storeId,
-            name: input.name.trim(),
+            name,
             code,
             description: input.description,
           },

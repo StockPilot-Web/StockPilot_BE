@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { UploadController } from './upload.controller';
 import { authMiddleware } from '../../common/middleware/auth';
+import { InvalidFileTypeError } from '../../common/errors/app-error';
 
 export const uploadRouter = Router();
 const controller = new UploadController();
@@ -19,7 +20,7 @@ const upload = multer({
     if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Chỉ chấp nhận file ảnh (JPG, PNG, WEBP, GIF)'));
+      cb(new InvalidFileTypeError());
     }
   },
 });

@@ -62,9 +62,16 @@ export const logoutSchema = z.object({
 });
 
 export const updateProfileSchema = z.object({
-  fullName: z.string().min(2, 'Ho ten phai co it nhat 2 ky tu').optional(),
+  fullName: z.string().trim().min(2, 'Họ tên phải có ít nhất 2 ký tự').optional(),
+  phone: z
+    .string()
+    .trim()
+    .min(9, 'Số điện thoại phải có ít nhất 9 chữ số')
+    .max(20, 'Số điện thoại không được vượt quá 20 ký tự')
+    .regex(/^[0-9+().\-\s]+$/, 'Số điện thoại chỉ được chứa chữ số và ký hiệu điện thoại hợp lệ')
+    .optional(),
 }).strict().refine((input) => Object.keys(input).length > 0, {
-  message: 'At least one profile field is required',
+  message: 'Vui lòng nhập ít nhất một thông tin hồ sơ cần cập nhật',
 });
 
 export const forgotPasswordSchema = z.object({
@@ -99,7 +106,13 @@ export const resetPasswordSchema = z.object({
 
 export const updateStoreSchema = z.object({
   storeName: z.string().trim().min(2, 'Tên cửa hàng phải có ít nhất 2 ký tự').optional(),
-  phone: z.string().optional(),
+  phone: z
+    .string()
+    .trim()
+    .min(9, 'Số điện thoại phải có ít nhất 9 chữ số')
+    .max(20, 'Số điện thoại không được vượt quá 20 ký tự')
+    .regex(/^[0-9+().\-\s]+$/, 'Số điện thoại chỉ được chứa chữ số và ký hiệu điện thoại hợp lệ')
+    .optional(),
   address: z.string().optional(),
 });
 

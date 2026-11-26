@@ -27,6 +27,7 @@ export const createProductSchema = z.object({
   items: z.array(stockItemInputSchema).min(1, 'Sản phẩm phải có ít nhất 1 mã SP/biến thể'),
 }).superRefine((input, ctx) => {
   const seen = new Set<string>();
+  const seenBarcodes = new Map<string, number>();
   input.items.forEach((item, index) => {
     const normalizedSku = item.sku.trim().toUpperCase();
     if (seen.has(normalizedSku)) {
@@ -37,6 +38,20 @@ export const createProductSchema = z.object({
       });
     }
     seen.add(normalizedSku);
+
+    const barcode = item.barcode?.trim();
+    if (barcode) {
+      const previousIndex = seenBarcodes.get(barcode);
+      if (previousIndex !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['items', index, 'barcode'],
+          message: `Mã vạch bị trùng với biến thể ${previousIndex + 1} trong cùng biểu mẫu`,
+        });
+      } else {
+        seenBarcodes.set(barcode, index);
+      }
+    }
   });
 });
 

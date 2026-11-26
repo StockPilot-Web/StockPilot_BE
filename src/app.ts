@@ -98,12 +98,14 @@ export function createApp(options: CreateAppOptions = {}): Express {
     })
   );
 
+  // Request ID must be assigned before body parsing so parser failures also carry a traceable ID.
+  app.use(requestIdMiddleware);
+
   // Body Parsing limits
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-  // Request ID, request telemetry, and sensitive data masking
-  app.use(requestIdMiddleware);
+  // Request telemetry and sensitive data masking
   app.use(requestLoggerMiddleware);
   // Blocked IPs are rejected here (after the logger, so they still show up in IP activity).
   if (ipBlockEnabled) app.use(ipBlockMiddleware);

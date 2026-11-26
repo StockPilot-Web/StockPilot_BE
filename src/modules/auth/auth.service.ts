@@ -524,26 +524,39 @@ export class AuthService {
   }
 
   async updateMe(userId: number, input: z.infer<typeof updateProfileSchema>) {
-    const user = await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        ...(input.fullName !== undefined ? { fullName: input.fullName.trim() } : {}),
-      },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        role: true,
-        isActive: true,
-        storeId: true,
-        updatedAt: true,
-      },
+    const user = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id: userId },
+        data: {
+          ...(input.fullName !== undefined ? { fullName: input.fullName.trim() } : {}),
+        },
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          role: true,
+          isActive: true,
+          storeId: true,
+          updatedAt: true,
+        },
+      });
+
+      if (input.phone !== undefined && updated.storeId !== null) {
+        await tx.store.update({
+          where: { id: updated.storeId },
+          data: { phone: input.phone.trim() },
+        });
+      }
+
+      return updated;
     });
 
     if (!user.isActive) {
       throw new UnauthenticatedError('Khong tim thay thong tin tai khoan');
     }
 
+    // The caller can refresh /auth/me for the latest store profile. Avoid a second
+    // read here so the update contract remains compatible with lightweight test doubles.
     return user;
   }
 
