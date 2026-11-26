@@ -1,10 +1,12 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
 import { v2 as cloudinary } from 'cloudinary';
 import { logger } from '../../common/logger';
 
 const LOCAL_UPLOAD_DIR = path.resolve(process.cwd(), 'data/uploads');
+const TMP_UPLOAD_DIR = path.join(os.tmpdir(), 'stockpilot-uploads');
 
 function hasCloudinaryConfig(): boolean {
   return Boolean(
@@ -39,11 +41,25 @@ function extFromMime(mimeType?: string): string {
 }
 
 async function saveLocalImage(buffer: Buffer, mimeType?: string): Promise<UploadResult> {
-  await fs.promises.mkdir(LOCAL_UPLOAD_DIR, { recursive: true });
   const ext = extFromMime(mimeType);
   const filename = `img_${Date.now()}_${crypto.randomBytes(6).toString('hex')}.${ext}`;
-  const fullPath = path.join(LOCAL_UPLOAD_DIR, filename);
-  await fs.promises.writeFile(fullPath, buffer);
+  let saved = false;
+
+  for (const dir of [LOCAL_UPLOAD_DIR, TMP_UPLOAD_DIR]) {
+    try {
+      await fs.promises.mkdir(dir, { recursive: true });
+      await fs.promises.writeFile(path.join(dir, filename), buffer);
+      saved = true;
+      break;
+    } catch (err) {
+      logger.warn('local_upload_dir_write_failed', { dir, err });
+    }
+  }
+
+  if (!saved) {
+    throw new Error('Không thể lưu ảnh vào bộ nhớ máy chủ');
+  }
+
   const publicUrl = `/api/v1/upload/files/${filename}`;
   return {
     url: publicUrl,
@@ -59,8 +75,11 @@ async function saveLocalImage(buffer: Buffer, mimeType?: string): Promise<Upload
 export function getLocalUploadPath(filename: string): string | null {
   const safeName = path.basename(String(filename || ''));
   if (!safeName || safeName === '.' || safeName === '..') return null;
-  const fullPath = path.join(LOCAL_UPLOAD_DIR, safeName);
-  return fs.existsSync(fullPath) ? fullPath : null;
+  for (const dir of [LOCAL_UPLOAD_DIR, TMP_UPLOAD_DIR]) {
+    const fullPath = path.join(dir, safeName);
+    if (fs.existsSync(fullPath)) return fullPath;
+  }
+  return null;
 }
 
 export interface UploadResult {
