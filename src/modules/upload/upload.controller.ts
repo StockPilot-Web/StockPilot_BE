@@ -43,7 +43,11 @@ export class UploadController {
         });
       }
 
-      const result = await uploadImageBuffer(req.file.buffer, 'stockpilot', req.file.mimetype);
+      const result = await uploadImageBuffer(
+        req.file.buffer,
+        process.env.CLOUDINARY_FOLDER || 'Stockpilot',
+        req.file.mimetype
+      );
 
       return res.status(200).json({
         success: true,
