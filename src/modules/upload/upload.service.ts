@@ -112,6 +112,7 @@ export async function uploadImageBuffer(
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           folder,
+          asset_folder: folder,
           resource_type: 'image',
           // Tự động tối ưu format (webp/avif) và chất lượng
           transformation: [
