@@ -26,6 +26,13 @@ export interface AlertEvaluationInput {
   deadStockSeverity: 'NONE' | 'WARNING' | 'CRITICAL';
   daysSinceLastSale: number | null;
   confidenceScore: number;
+  /** Additional engine evidence shown in the alert detail view. */
+  historyDays?: number;
+  dataStatus?: 'OK' | 'INSUFFICIENT_DATA';
+  daysOfCover?: number | null;
+  safetyStock?: number;
+  confidenceLevel?: 'LOW' | 'MEDIUM' | 'HIGH';
+  calculatedAt?: string;
   engineVersion?: string;
   unusualDemand: {
     isAnomaly: boolean;
@@ -33,6 +40,7 @@ export interface AlertEvaluationInput {
     zScore: number;
   };
   /** Store risk bands (engine config); defaults match DEFAULT_ENGINE_CONFIG. */
+  lowRiskThreshold?: number;
   highRiskThreshold?: number;
   criticalRiskThreshold?: number;
 }
@@ -123,7 +131,14 @@ export class AlertService {
       deadStockSeverity,
       daysSinceLastSale,
       confidenceScore,
+      historyDays,
+      dataStatus,
+      daysOfCover,
+      safetyStock,
+      confidenceLevel,
+      calculatedAt,
       engineVersion = 'DECISION_ENGINE_V1',
+      lowRiskThreshold = 25,
       unusualDemand,
       highRiskThreshold = 50,
       criticalRiskThreshold = 75,
@@ -138,6 +153,26 @@ export class AlertService {
       isDeadStock,
       highRiskThreshold,
     });
+
+    // Keep the evidence that produced the alert with the alert itself. This prevents the UI from
+    // guessing from a stale or incomplete reasonJson and makes every score explainable to the user.
+    const analysisEvidence = {
+      availableStock,
+      reorderPoint,
+      stockoutScore,
+      overstockScore,
+      confidenceScore,
+      ...(historyDays !== undefined ? { historyDays } : {}),
+      ...(dataStatus !== undefined ? { dataStatus } : {}),
+      ...(daysOfCover !== undefined ? { daysOfCover } : {}),
+      ...(safetyStock !== undefined ? { safetyStock } : {}),
+      ...(confidenceLevel !== undefined ? { confidenceLevel } : {}),
+      ...(calculatedAt !== undefined ? { calculatedAt } : {}),
+      engineVersion,
+      lowRiskThreshold,
+      highRiskThreshold,
+      criticalRiskThreshold,
+    };
 
     // 1. Determine active alert triggers
     // Priority: STOCKOUT supersedes LOW_STOCK (mutually exclusive)
@@ -157,7 +192,7 @@ export class AlertService {
         riskScore: 100,
         title: `Hết hàng: ${sku} (${productName})`,
         message: `Sản phẩm ${sku} hiện có sẵn 0 sản phẩm trong kho. Cần nhập hàng khẩn cấp.`,
-        reasonJson: { availableStock, reorderPoint, stockoutScore: 100 },
+        reasonJson: { ...analysisEvidence, stockoutScore: 100 },
       };
     } else if (classification.stockoutRisk) {
       const sev: AlertSeverity =
@@ -168,7 +203,7 @@ export class AlertService {
         riskScore: stockoutScore,
         title: `Cảnh báo tồn kho thấp: ${sku}`,
         message: `Sản phẩm ${sku} chỉ còn ${availableStock} đơn vị khả dụng, dưới điểm đặt hàng ${reorderPoint}.`,
-        reasonJson: { availableStock, reorderPoint, stockoutScore },
+        reasonJson: analysisEvidence,
       };
     }
 
@@ -190,7 +225,7 @@ export class AlertService {
         riskScore: overstockScore,
         title: `Hàng tồn kho ứ đọng: ${sku}`,
         message: `Sản phẩm ${sku} không có giao dịch bán hàng trong ${daysSinceLastSale ?? 90} ngày qua. Cần xem xét giảm giá xả hàng.`,
-        reasonJson: { daysSinceLastSale, overstockScore, deadStockSeverity },
+        reasonJson: { ...analysisEvidence, daysSinceLastSale, deadStockSeverity },
       };
     } else if (classification.overstockRisk) {
       overstockTrigger = {
@@ -199,7 +234,7 @@ export class AlertService {
         riskScore: overstockScore,
         title: `Cảnh báo thừa hàng: ${sku}`,
         message: describeOverstock(sku, availableStock, overstockDetail),
-        reasonJson: { overstockScore, availableStock, ...(overstockDetail ? { overstock: overstockDetail } : {}) },
+        reasonJson: { ...analysisEvidence, ...(overstockDetail ? { overstock: overstockDetail } : {}) },
       };
     }
 
@@ -219,7 +254,7 @@ export class AlertService {
         riskScore: 0,
         title: `Hàng bán chậm: ${sku}`,
         message: `Sản phẩm ${sku} không ghi nhận doanh số bán trong ${daysSinceLastSale ?? 'nhiều'} ngày.`,
-        reasonJson: { isSlowMoving, daysSinceLastSale, overstockScore },
+        reasonJson: { ...analysisEvidence, isSlowMoving, daysSinceLastSale },
       };
     }
 
@@ -244,7 +279,7 @@ export class AlertService {
           unusualDemand.type === 'NEW_DEMAND_SPIKE'
             ? `Sản phẩm ${sku} bất ngờ phát sinh lượt bán mới sau thời gian dài không có nhu cầu.`
             : `Sản phẩm ${sku} có biến động nhu cầu đột biến (Độ lệch chuẩn Z: ${unusualDemand.zScore}).`,
-        reasonJson: unusualDemand,
+        reasonJson: { ...analysisEvidence, ...unusualDemand },
       };
     }
 
