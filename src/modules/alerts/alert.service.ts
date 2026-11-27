@@ -44,6 +44,8 @@ export interface AlertEvaluationInput {
   lowRiskThreshold?: number;
   highRiskThreshold?: number;
   criticalRiskThreshold?: number;
+  slowMovingDays?: number;
+  deadStockDays?: number;
 }
 
 /**
@@ -102,6 +104,24 @@ export function describeOverstock(sku: string, availableStock: number, detail?: 
   return `Sản phẩm ${sku}: ${parts.join('; ')}.`;
 }
 
+/**
+ * Maps days without a sale to the shared 0-100 alert risk scale.
+ * Slow-moving starts at 50, dead stock at 75, and critical dead stock at 100.
+ */
+export function calculateSlowMovingRiskScore(
+  daysSinceLastSale: number | null,
+  slowMovingDays: number,
+  deadStockDays: number
+): number {
+  if (daysSinceLastSale === null || daysSinceLastSale < slowMovingDays) return 0;
+  if (daysSinceLastSale >= deadStockDays * 2) return 100;
+  if (daysSinceLastSale >= deadStockDays) {
+    return Math.min(100, Math.round(75 + ((daysSinceLastSale - deadStockDays) / deadStockDays) * 25));
+  }
+  const range = Math.max(1, deadStockDays - slowMovingDays);
+  return Math.min(75, Math.round(50 + ((daysSinceLastSale - slowMovingDays) / range) * 25));
+}
+
 export class AlertService {
   constructor(private readonly prisma: PrismaClient = defaultPrisma) {}
 
@@ -143,6 +163,8 @@ export class AlertService {
       unusualDemand,
       highRiskThreshold = 50,
       criticalRiskThreshold = 75,
+      slowMovingDays = 60,
+      deadStockDays = 90,
     } = input;
 
     // Same categories as the Decision Engine overview (see risk-classification.ts).
@@ -249,13 +271,14 @@ export class AlertService {
     } | null = null;
 
     if (!isDeadStock && isSlowMoving) {
+      const slowMovingRiskScore = calculateSlowMovingRiskScore(daysSinceLastSale, slowMovingDays, deadStockDays);
       slowMovingTrigger = {
         type: 'SLOW_MOVING',
         severity: 'WARNING',
-        riskScore: 0,
+        riskScore: slowMovingRiskScore,
         title: `Hàng bán chậm: ${sku}`,
         message: `Sản phẩm ${sku} không ghi nhận doanh số bán trong ${daysSinceLastSale ?? 'nhiều'} ngày.`,
-        reasonJson: { ...analysisEvidence, isSlowMoving, daysSinceLastSale },
+        reasonJson: { ...analysisEvidence, isSlowMoving, daysSinceLastSale, slowMovingRiskScore, slowMovingDays, deadStockDays },
       };
     }
 

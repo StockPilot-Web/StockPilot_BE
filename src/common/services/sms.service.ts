@@ -26,6 +26,7 @@ export function normalizePhoneNumber(phone: string): string {
  */
 export async function sendPasswordResetOtpSms({
   phone,
+  name: _name,
   otp,
   expiresMinutes = 15,
 }: SendOtpSmsParams): Promise<{ sent: boolean; simulated?: boolean }> {

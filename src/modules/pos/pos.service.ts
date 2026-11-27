@@ -7,7 +7,9 @@ import { BusinessSyncService } from '../../common/services/business-sync.service
 import { createPosSaleSchema } from './pos.schema';
 import { z } from 'zod';
 
-type CreatePosSaleInput = z.input<typeof createPosSaleSchema>;
+type CreatePosSaleOutput = z.output<typeof createPosSaleSchema>;
+type CreatePosSaleInput = Omit<CreatePosSaleOutput, 'discountAmount' | 'taxAmount'>
+  & Partial<Pick<CreatePosSaleOutput, 'discountAmount' | 'taxAmount'>>;
 
 export class PosService {
   constructor(private readonly db: PrismaClient = defaultPrisma) {}

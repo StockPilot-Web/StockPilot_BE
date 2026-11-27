@@ -238,6 +238,8 @@ export class DecisionEngineService {
             unusualDemand: result.risk.unusualDemand as AlertEvaluationInput['unusualDemand'],
             highRiskThreshold: result.engineConfig.highRiskThreshold,
             criticalRiskThreshold: result.engineConfig.criticalRiskThreshold,
+            slowMovingDays: result.engineConfig.slowMovingDays,
+            deadStockDays: result.engineConfig.deadStockDays,
           },
           tx
         );

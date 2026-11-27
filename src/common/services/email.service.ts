@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import nodemailer from 'nodemailer';
 import { logger } from '../logger';
 

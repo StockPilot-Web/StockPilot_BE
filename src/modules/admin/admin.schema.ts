@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { paginationQuerySchema } from '../../common/utils/pagination';
 import { SYSTEM_SETTING_KEYS } from '../../common/services/system-settings.service';
+import type { SystemSettingKey } from '../../common/services/system-settings.service';
 
 /** Current admin's own password, re-entered to confirm a high-impact action. */
 const actorPasswordSchema = z.string().min(1, 'Vui lòng nhập mật khẩu của bạn để xác nhận').max(128);
@@ -62,7 +63,7 @@ export const revokeSessionsSchema = z
   .strict();
 
 export const settingKeyParamSchema = z.object({
-  key: z.enum(SYSTEM_SETTING_KEYS as [string, ...string[]], { error: 'Cài đặt không tồn tại' }),
+  key: z.enum(SYSTEM_SETTING_KEYS as [SystemSettingKey, ...SystemSettingKey[]], { error: 'Cài đặt không tồn tại' }),
 });
 
 export const updateSystemSettingSchema = z

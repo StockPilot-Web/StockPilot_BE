@@ -1,7 +1,7 @@
 import { HistoricalSalesService } from '../src/modules/historical-sales/historical-sales.service';
 import { DailySalesSummaryService } from '../src/modules/daily-sales-summary/daily-sales-summary.service';
 import { DecisionEngineService } from '../src/modules/decision-engine/decision-engine.service';
-import { AlertEvaluationInput, AlertService } from '../src/modules/alerts/alert.service';
+import { AlertEvaluationInput, AlertService, calculateSlowMovingRiskScore } from '../src/modules/alerts/alert.service';
 import { PricingService } from '../src/modules/pricing/pricing.service';
 import { AssistantService } from '../src/modules/assistant/assistant.service';
 import { DECISION_ENGINE_VERSION, EngineConfigService } from '../src/modules/decision-engine/engine-config.service';
@@ -32,6 +32,16 @@ jest.mock('../src/config/db', () => ({
 }));
 
 describe('Decision Engine & Historical Sales Pipeline Integration', () => {
+  describe('Slow-moving alert risk score', () => {
+    it('uses a non-zero score and increases with days without sale', () => {
+      expect(calculateSlowMovingRiskScore(60, 60, 90)).toBe(50);
+      expect(calculateSlowMovingRiskScore(75, 60, 90)).toBeGreaterThan(50);
+      expect(calculateSlowMovingRiskScore(90, 60, 90)).toBe(75);
+      expect(calculateSlowMovingRiskScore(180, 60, 90)).toBe(100);
+      expect(calculateSlowMovingRiskScore(45, 60, 90)).toBe(0);
+    });
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
