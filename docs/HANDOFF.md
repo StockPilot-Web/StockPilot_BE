@@ -150,6 +150,8 @@ npm run maintenance:rebuild-summary-v10 -- --storeId=1
 
 ## Test Evidence Labels
 
+Security-hardening patch verification (2026-11-25): 67 suites / 680 tests passed, typecheck and build passed, and native production dependency audit reported 0 vulnerabilities. OTP logging was removed, simulated OTP delivery no longer reports success, push input errors use `AppError`, and global AI memory no longer stores or serves store-specific learned answers. This evidence covers the checked-out patch only; it is not production-observed evidence.
+
 - Accounting: `MYSQL_INTEGRATION_TESTED`
 - Decision Engine: `UNIT_TESTED`, `API_INTEGRATION_TESTED`, `MYSQL_INTEGRATION_TESTED`
 - Pricing: `MYSQL_INTEGRATION_TESTED`

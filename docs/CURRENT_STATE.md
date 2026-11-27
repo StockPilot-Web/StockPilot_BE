@@ -92,6 +92,16 @@ The schema foundations exist, but these workflows are not implemented as complet
 
 ## Test State
 
+Latest security-hardening verification on 2026-11-25:
+
+- `npm run typecheck`: passed after migrating the validation call sites to Zod 4.6.7.
+- `npm run lint`: passed with 8 pre-existing warnings and no errors.
+- `npm run build`: passed.
+- `npm test`: 67 suites / 680 tests passed, including OTP logging, SMS simulation status, push validation, AI tenant-isolation, POS, RBAC, tenant, payment, idempotency, and MySQL integration tests.
+- `npm audit --omit=dev --audit-level=high`: passed with 0 vulnerabilities after updating Zod and qs.
+- `npm run handoff:check`: passed; local `.env` warning remains expected and must stay untracked.
+- `npm run prisma:generate`: remains blocked on this Windows workstation by `EPERM` while renaming the Prisma query engine; retry from a clean checkout/CI before release.
+
 Latest verified evidence:
 
 - `npm run prisma:generate`: passed
