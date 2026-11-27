@@ -333,6 +333,12 @@ describe('Decision Engine role projection and store isolation (D9)', () => {
       expect(res.status).toBe(400);
     });
 
+    it.each([{}, { question: '' }, { question: '   ' }, { question: '\n\t' }])('rejects an empty chat question: %j', async (body) => {
+      const res = await request(app).post('/api/v1/assistant/chat').set(auth(ownerToken)).send(body);
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+    });
+
     it('treats a null stockItemId as "no product selected"', async () => {
       const res = await request(app)
         .post('/api/v1/assistant/chat')
