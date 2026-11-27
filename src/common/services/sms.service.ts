@@ -20,11 +20,11 @@ export function normalizePhoneNumber(phone: string): string {
 
 /**
  * Gửi mã OTP xác thực qua tin nhắn SMS / SMS Gateway
- * Hỗ trợ chế độ giả lập (Simulation) in ra terminal và tích hợp SMS Gateway (eSMS, SpeedSMS, Twilio)
+ * Hỗ trợ chế độ giả lập và tích hợp SMS Gateway (eSMS, SpeedSMS, Twilio)
  */
 export async function sendPasswordResetOtpSms({
   phone,
-  name,
+  name: _name,
   otp,
   expiresMinutes = 15,
 }: SendOtpSmsParams): Promise<{ sent: boolean; simulated?: boolean }> {
@@ -33,17 +33,10 @@ export async function sendPasswordResetOtpSms({
   const smsApiKey = process.env.SMS_API_KEY || '';
   const smsSecret = process.env.SMS_API_SECRET || process.env.SMS_SECRET_KEY || '';
 
-  // Chế độ Giả lập / Terminal log nếu chưa cấu hình cổng SMS
+  // Chế độ giả lập không được coi là gửi thành công và không được log OTP.
   if (smsProvider === 'simulation' || !smsApiKey) {
-    logger.info(`[SMS Service - Chế độ Giả lập] Không có SMS_API_KEY, hiển thị mã OTP SMS ra console:`);
-    console.log('\n======================================================');
-    console.log(`📱 [STOCKPILOT SMS OTP SERVICE]`);
-    console.log(`   Khách hàng: ${name || 'Chủ cửa hàng'}`);
-    console.log(`   Đến SĐT:    ${normalizedPhone}`);
-    console.log(`   Mã OTP:     >>> ${otp} <<<`);
-    console.log(`   Hết hạn:    ${expiresMinutes} phút`);
-    console.log('======================================================\n');
-    return { sent: true, simulated: true };
+    logger.warn('[SMS Service] OTP SMS was not sent because the SMS provider is unavailable', { channel: 'sms', simulated: true });
+    return { sent: false, simulated: true };
   }
 
   // Tích hợp SpeedSMS Gateway nếu có cấu hình
@@ -101,12 +94,6 @@ export async function sendPasswordResetOtpSms({
     }
   }
 
-  // Dự phòng hiển thị ra Terminal nếu gọi cổng thật lỗi
-  console.log('\n======================================================');
-  console.log(`⚠️ Gửi SMS qua cổng thất bại, mã OTP dự phòng:`);
-  console.log(`   Đến SĐT: ${normalizedPhone}`);
-  console.log(`   Mã OTP:  >>> ${otp} <<<`);
-  console.log('======================================================\n');
-
-  return { sent: true, simulated: true };
+  logger.error('[SMS Service] OTP SMS delivery failed for all configured providers', { channel: 'sms', simulated: true });
+  return { sent: false, simulated: true };
 }

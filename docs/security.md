@@ -109,6 +109,8 @@ CSV exports do not pass through JSON response masking. Export routes therefore e
 
 Secrets must never be committed.
 
+OTP codes must never be written to application logs or terminal fallbacks. When an email/SMS provider is unavailable, the delivery result is reported as simulated and unsent.
+
 Do not log:
 
 - passwords
