@@ -146,10 +146,13 @@ describe('Login API integration (A1)', () => {
     );
   });
 
-  it('records UNKNOWN_ACCOUNT but returns the same generic 401', async () => {
+  it('records UNKNOWN_ACCOUNT and reports that the account does not exist', async () => {
     const res = await request(app).post('/api/v1/auth/login').send({ email: 'ghost@nowhere.test', password: 'whatever123' });
-    expect(res.status).toBe(401);
-    expect(res.body.error.message).toBe('Tài khoản hoặc mật khẩu không chính xác');
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Tài khoản chưa tồn tại',
+    });
     const call = db.auditLog.create.mock.calls.find((c: any[]) => c[0].data.action === 'LOGIN_FAILED');
     expect(call[0].data.afterJson.reason).toBe('UNKNOWN_ACCOUNT');
   });

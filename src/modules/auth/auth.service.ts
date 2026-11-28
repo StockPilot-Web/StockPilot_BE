@@ -9,7 +9,7 @@ import {
   hashToken,
   getRefreshTokenExpiry,
 } from '../../common/utils/jwt';
-import { ConflictError, ForbiddenError, UnauthenticatedError, ValidationError } from '../../common/errors/app-error';
+import { ConflictError, ForbiddenError, NotFoundError, UnauthenticatedError, ValidationError } from '../../common/errors/app-error';
 import { SystemSettingsService } from '../../common/services/system-settings.service';
 import { env } from '../../config/env';
 import { z } from 'zod';
@@ -306,8 +306,13 @@ export class AuthService {
     const attempt = { userId: user?.id ?? null, storeId: user?.storeId ?? null, ipAddress: meta?.ipAddress, userAgent: meta?.userAgent };
     await loginGuard.assertNotLocked(input.email, attempt);
 
-    if (!user || !user.isActive || (user.storeId && !user.store?.isActive)) {
-      await loginGuard.recordFailure(input.email, user ? 'INACTIVE_ACCOUNT' : 'UNKNOWN_ACCOUNT', attempt);
+    if (!user) {
+      await loginGuard.recordFailure(input.email, 'UNKNOWN_ACCOUNT', attempt);
+      throw new NotFoundError('Tài khoản chưa tồn tại');
+    }
+
+    if (!user.isActive || (user.storeId && !user.store?.isActive)) {
+      await loginGuard.recordFailure(input.email, 'INACTIVE_ACCOUNT', attempt);
       throw new UnauthenticatedError('Tài khoản hoặc mật khẩu không chính xác');
     }
 
