@@ -1,6 +1,6 @@
 import { AuthService } from '../src/modules/auth/auth.service';
 import { prisma } from '../src/config/db';
-import { ConflictError, UnauthenticatedError, ValidationError } from '../src/common/errors/app-error';
+import { ConflictError, NotFoundError, UnauthenticatedError, ValidationError } from '../src/common/errors/app-error';
 import { generateRefreshToken } from '../src/common/utils/jwt';
 
 jest.mock('../src/config/db', () => ({
@@ -132,6 +132,17 @@ describe('AuthService - Shop Owner Registration, Login & Session Management', ()
         password: 'wrongpassword',
       })
     ).rejects.toThrow(UnauthenticatedError);
+  });
+
+  it('phải ném lỗi NotFoundError nếu tài khoản chưa tồn tại', async () => {
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+
+    await expect(
+      authService.login({
+        email: 'missing@test.com',
+        password: 'password123',
+      })
+    ).rejects.toThrow(NotFoundError);
   });
 
   it('phải xoay vòng Refresh Token (Rotation) và thu hồi phiên cũ khi refresh', async () => {
