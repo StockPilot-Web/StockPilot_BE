@@ -101,9 +101,12 @@ describe('PosService', () => {
     const result = await service.createCashSale(
       1,
       99,
-      { paymentMethod: 'CASH', discountAmount: 1000, items: [{ stockItemId: 7, quantity: 2 }] },
+      { paymentMethod: 'CASH', discountAmount: 1000, items: [{ stockItemId: 7, quantity: 2, price: 12000 }] },
       'POS_SALE_CREATE:1:key'
     );
+
+    const createdOrder = prisma.order.create.mock.calls[0][0].data;
+    expect(createdOrder.items.create[0].unitPriceSnapshot.toString()).toBe('12000');
 
     expect(prisma.order.create).toHaveBeenCalledWith(
       expect.objectContaining({
